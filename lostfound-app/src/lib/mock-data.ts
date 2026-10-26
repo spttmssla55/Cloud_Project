@@ -1,0 +1,187 @@
+/**
+ * 목업 데이터 — 활용가이드의 응답 예시와 같은 모양.
+ * Lambda 를 연결하면 쓰지 않는다 (src/lib/api.ts 참고).
+ */
+import { localYmd } from "./format";
+import type { FoundItemDetail } from "./types";
+
+const day = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localYmd(d);
+};
+const at = (n: number, h: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  d.setHours(h, 10, 0, 0);
+  return d.toISOString();
+};
+
+export const MOCK_ITEMS: FoundItemDetail[] = [
+  {
+    source: "user",
+    atcId: "U2026000000000001",
+    fdSn: "1",
+    fdPrdtNm: "무선이어폰 (흰색 케이스)",
+    prdtClNm: "전자기기 > 무선이어폰",
+    clrNm: "흰색",
+    fdSbjt: "흰색 무선이어폰 케이스, 곰돌이 스티커",
+    depPlace: "신구대 도서관 1층 안내데스크 옆 벤치",
+    fdYmd: day(0),
+    status: "현장에 있음",
+    foundPlace: "신구대 도서관 1층 열람실",
+    currentPlace: "신구대 도서관 1층 안내데스크 옆 벤치",
+    features: ["곰돌이 스티커", "케이스 모서리 긁힘"],
+    sightings: [
+      { at: at(1, 15), foundPlace: "신구대 도서관 1층 열람실", currentPlace: "신구대 도서관 1층 열람실", note: "열람실 책상 위에 있었어요" },
+      { at: at(0, 10), foundPlace: "신구대 도서관 1층 열람실", currentPlace: "신구대 도서관 1층 안내데스크 옆 벤치", note: "오늘 신구대에서 이거 봤는데 옆에 올려둘게요" },
+    ],
+  },
+  {
+    source: "portal",
+    atcId: "V0001882C05180022",
+    fdSn: "1",
+    fdPrdtNm: "반지갑",
+    prdtClNm: "지갑 > 남성용 지갑",
+    clrNm: "블랙(검정)",
+    fdSbjt: "반지갑(블랙(검정)색)을 습득하여 보관하고 있습니다.",
+    depPlace: "수서역(에스알고속철도)",
+    fdYmd: day(0),
+    status: "보관중",
+    fdHor: "09",
+    fdPlace: "대합실",
+    fndKeepOrgnSeNm: "철도",
+    orgNm: "수서역(에스알고속철도)",
+    tel: "1544-7788",
+    uniq: "수서역에서 반지갑(블랙(검정)색)을 습득/보관하였습니다. 본인을 증명할 수 있는 서류를 지참하시어 보관 기관에 방문하시기 바랍니다. 특이사항 : 카드 2장",
+  },
+  {
+    source: "portal",
+    atcId: "V0000004B04150018",
+    fdSn: "1",
+    fdPrdtNm: "여권(핑크색케이스)",
+    prdtClNm: "증명서 > 여권",
+    clrNm: "핑크(연한핑크)",
+    fdSbjt: "여권(핑크색케이스)(핑크(연한핑크)색)을 습득하여 보관하고 있습니다.",
+    depPlace: "공항터미널",
+    fdYmd: day(1),
+    status: "보관중",
+    fdHor: "14",
+    fdPlace: "출국장 의자",
+    fndKeepOrgnSeNm: "공항",
+    orgNm: "공항터미널 유실물센터",
+    tel: "02-0000-0000",
+    uniq: "특이사항 : 없음",
+  },
+  {
+    source: "user",
+    atcId: "U2026000000000002",
+    fdSn: "1",
+    fdPrdtNm: "장우산",
+    prdtClNm: "우산 > 장우산",
+    clrNm: "남색",
+    fdSbjt: "남색 장우산, 손잡이 나무",
+    depPlace: "신구대 정문 경비실",
+    fdYmd: day(1),
+    status: "현장에 있음",
+    foundPlace: "신구대 정문 버스정류장",
+    currentPlace: "신구대 정문 경비실",
+    features: ["나무 손잡이"],
+    sightings: [
+      { at: at(1, 8), foundPlace: "신구대 정문 버스정류장", currentPlace: "신구대 정문 경비실", note: "정류장 의자에 있어서 경비실에 맡겼어요" },
+    ],
+  },
+  {
+    source: "portal",
+    atcId: "V0000058B04190002",
+    fdSn: "1",
+    fdPrdtNm: "여성용 반지갑",
+    prdtClNm: "지갑 > 여성용 지갑",
+    clrNm: "퓨시아(자홍)",
+    fdSbjt: "여성용 반지갑(퓨시아(자홍)색)을 습득하여 보관하고 있습니다.",
+    depPlace: "서울스퀘어",
+    fdYmd: day(2),
+    status: "보관중",
+    fdHor: "18",
+    fdPlace: "지하 1층 엘리베이터 앞",
+    fndKeepOrgnSeNm: "빌딩",
+    orgNm: "서울스퀘어 안내데스크",
+    tel: "02-0000-0001",
+    uniq: "특이사항 : 없음",
+  },
+  {
+    source: "portal",
+    atcId: "V0001234C05180101",
+    fdSn: "1",
+    fdPrdtNm: "스마트폰",
+    prdtClNm: "휴대폰 > 스마트폰",
+    clrNm: "그레이(회)",
+    fdSbjt: "스마트폰(그레이(회)색)을 습득하여 보관하고 있습니다.",
+    depPlace: "메트로9 유실물센터",
+    fdYmd: day(2),
+    status: "보관중",
+    fdHor: "08",
+    fdPlace: "열차 내",
+    fndKeepOrgnSeNm: "지하철",
+    orgNm: "메트로9",
+    tel: "02-0000-0002",
+    uniq: "특이사항 : 투명 케이스",
+  },
+  {
+    source: "user",
+    atcId: "U2026000000000003",
+    fdSn: "1",
+    fdPrdtNm: "학생증",
+    prdtClNm: "카드 > 신분증",
+    clrNm: "흰색",
+    fdSbjt: "학생증 (이름 가림)",
+    depPlace: "신구대 학생회관 1층 편의점",
+    fdYmd: day(3),
+    status: "현장에 있음",
+    foundPlace: "신구대 학생회관 계단",
+    currentPlace: "신구대 학생회관 1층 편의점",
+    features: ["개인정보는 가려서 저장됨"],
+    sightings: [
+      { at: at(3, 12), foundPlace: "신구대 학생회관 계단", currentPlace: "신구대 학생회관 1층 편의점", note: "계단에 떨어져 있어서 편의점에 맡겼습니다" },
+    ],
+  },
+  {
+    source: "portal",
+    atcId: "V0000004B04150022",
+    fdSn: "1",
+    fdPrdtNm: "백팩",
+    prdtClNm: "가방 > 백팩",
+    clrNm: "블랙(검정)",
+    fdSbjt: "백팩(블랙(검정)색), 노트북 등을 습득하여 보관하고 있습니다.",
+    depPlace: "코엑스몰",
+    fdYmd: day(4),
+    status: "보관중",
+    fdHor: "20",
+    fdPlace: "푸드코트",
+    fndKeepOrgnSeNm: "쇼핑몰",
+    orgNm: "코엑스몰 고객센터",
+    tel: "02-0000-0003",
+    uniq: "특이사항 : 노트북 포함",
+  },
+  {
+    source: "portal",
+    atcId: "V0000060B02240006",
+    fdSn: "1",
+    fdPrdtNm: "카드지갑",
+    prdtClNm: "지갑 > 기타 지갑",
+    clrNm: "그레이(회)",
+    fdSbjt: "카드지갑(그레이(회)색)을 습득하여 보관하고 있습니다.",
+    depPlace: "롯데월드",
+    fdYmd: day(5),
+    status: "보관중",
+    fdHor: "16",
+    fdPlace: "노상",
+    fndKeepOrgnSeNm: "놀이동산",
+    orgNm: "롯데월드 매표소",
+    tel: "02-0000-0004",
+    uniq: "특이사항 : 없음",
+  },
+];
+
+/** 화면 필터에 쓰는 대분류 (API 의 물품분류명 앞부분) */
+export const CATEGORIES = ["지갑", "휴대폰", "전자기기", "카드", "증명서", "가방", "우산"];

@@ -1,18 +1,27 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+/**
+ * 앱 전체 틀: 아래 탭(목록·챗봇) 위에 상세 화면이 쌓이는 구조
+ */
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { C } from "@/lib/theme";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <>
+      {/* 휴대폰이 다크 모드여도 밝은 화면으로 통일 (글자가 잘 보이게) */}
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerTintColor: C.ink,
+          headerStyle: { backgroundColor: C.card },
+          headerTitleStyle: { fontWeight: "700" },
+          contentStyle: { backgroundColor: C.bg },
+          headerBackTitle: "뒤로",
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="item/[id]" options={{ title: "습득물 자세히" }} />
+      </Stack>
+    </>
   );
 }
