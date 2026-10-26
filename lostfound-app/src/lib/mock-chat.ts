@@ -5,6 +5,7 @@
  */
 import { localYmd } from "./format";
 import { MOCK_ITEMS } from "./mock-data";
+import { addFoundItem, addLost, getApp, isSimilar } from "./store";
 import type { Analysis, ChatReply, ChatRequest, ChatState, FoundItem } from "./types";
 
 const FOUND_WORDS = /(발견|주웠|주움|봤|봄|있길래|떨어져|습득|맡겼|올려둘|두고 갑)/;
@@ -38,7 +39,11 @@ function analyze(text: string, imageName = ""): Analysis {
     [/(가방|백팩|bag)/, { kind: "백팩", category: "가방", color: "검정" }],
     [/(여권|passport)/, { kind: "여권", category: "증명서", color: "남색" }],
   ];
-  const hit = rules.find(([re]) => re.test(s))?.[1] ?? { kind: "반지갑", category: "지갑", color: "검정" };
+  const base = rules.find(([re]) => re.test(s))?.[1] ?? { kind: "반지갑", category: "지갑", color: "검정" };
+  // 글에 색이 적혀 있으면 그 색을 쓴다 (실제로는 AI 가 사진에서 판단)
+  const said = s.match(/(검정|검은|블랙|흰|하얀|화이트|빨간|빨강|파란|파랑|남색|노란|노랑|초록|회색|그레이|분홍|핑크|갈색|베이지|은색|금색)/)?.[1];
+  const COLOR: Record<string, string> = { 검은: "검정", 블랙: "검정", 흰: "흰색", 하얀: "흰색", 화이트: "흰색", 빨간: "빨강", 파란: "파랑", 노란: "노랑", 그레이: "회색", 핑크: "분홍" };
+  const hit = said ? { ...base, color: COLOR[said] ?? said } : base;
   const features: string[] = [];
   if (/스티커/.test(s)) features.push("스티커");
   if (/(흠집|긁힘|스크래치)/.test(s)) features.push("긁힌 자국");
@@ -177,6 +182,7 @@ export async function mockChat(req: ChatRequest): Promise<ChatReply> {
 
     const same = st.step === "ask_same" && /^같은/.test(text);
     const item = newItem(st);
+    addFoundItem(item); // 저장 + 잃어버린 물건과 비교해서 알림
     if (same) {
       messages.push({ type: "text", text: "같은 물건으로 확인했어요. **현재 위치만 새로 바꾸고**, 예전 위치는 이동 기록으로 남겨 둘게요." });
     } else if (st.step === "ask_same") {
@@ -221,18 +227,36 @@ export async function mockChat(req: ChatRequest): Promise<ChatReply> {
     st.lostPlace = trimNear(p);
   }
 
-  const found = search(st.analysis, st.features ?? "");
+  const a = st.analysis;
+  const found = search(a, st.features ?? "").filter((it) => isSimilar(a, it) || it.prdtClNm.startsWith(a.category));
   if (found.length) {
     messages.push({ type: "results", title: `${st.lostPlace} 주변에서 비슷한 물건 ${found.length}건을 찾았어요`, items: found });
-    messages.push({ type: "text", text: "맞는 물건이 없으면 **알림**을 켜 두세요. 비슷한 물건이 새로 등록되면 바로 알려 드릴게요." });
   } else {
-    messages.push({ type: "text", text: "아직 비슷한 물건이 없어요. **알림**을 켜 두면 새로 등록될 때 바로 알려 드릴게요." });
+    messages.push({ type: "text", text: "아직 비슷한 물건이 없어요." });
   }
+
+  // 잃어버린 물건으로 등록 → 나중에 비슷한 습득물이 등록되면 알림
+  if (!getApp().user) {
+    messages.push({ type: "text", text: "**로그인**하면 잃어버린 물건으로 등록해 두고, 비슷한 물건이 들어올 때 **알림**을 보내 드려요." });
+    return {
+      state: { mode: undefined, step: "done" },
+      messages,
+      quickReplies: [
+        { label: "🔑 로그인하러 가기", value: "", action: "go_mypage" },
+        { label: "처음으로", value: "__reset__" },
+      ],
+    };
+  }
+  const lost = addLost(
+    { kind: a.kind, category: a.category, color: a.color, features: a.features.filter((f) => f !== "특별한 표시 없음"), place: st.lostPlace! },
+    found.map((it) => it.atcId),
+  );
+  messages.push({ type: "lost_saved", lost });
   return {
     state: { mode: undefined, step: "done" },
     messages,
     quickReplies: [
-      { label: "🔔 알림 받기", value: "알림 받을게요" },
+      { label: "마이페이지에서 보기", value: "", action: "go_mypage" },
       { label: "처음으로", value: "__reset__" },
     ],
   };

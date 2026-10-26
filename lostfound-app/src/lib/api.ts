@@ -9,11 +9,14 @@
  * 우리 API (Lambda) 약속
  *   GET  /items?keyword=&category=&source=&days=   → { items: FoundItem[] }
  *   GET  /items/detail?atcId=&fdSn=                → FoundItemDetail
+ *   GET  /stats                                    → { total, today }
+ *   GET  /me                                       → { user, myItems, lost, notices }   (로그인 후)
  *   POST /chat   ChatRequest                       → ChatReply
  */
 import { MOCK_ITEMS } from "./mock-data";
 import { mockChat } from "./mock-chat";
-import type { ChatReply, ChatRequest, FoundItem, FoundItemDetail, ListQuery } from "./types";
+import { localYmd } from "./format";
+import type { ChatReply, ChatRequest, FoundItem, FoundItemDetail, ListQuery, Stats } from "./types";
 
 const API = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 export const IS_MOCK = !API;
@@ -32,13 +35,16 @@ export async function listItems(q: ListQuery = {}): Promise<FoundItem[]> {
   if (IS_MOCK) {
     await new Promise((r) => setTimeout(r, 250));
     const since = q.days ? Date.now() - q.days * 86400000 : 0;
-    const kw = (q.keyword || "").trim();
+    // 검색어를 띄어쓰기로 나눠서 모든 단어가 어딘가에 들어 있으면 보여 준다 ("검정 지갑")
+    const words = (q.keyword || "").trim().split(/\s+/).filter(Boolean);
+    const hit = (it: FoundItem) =>
+      words.every((w) => [it.fdPrdtNm, it.prdtClNm, it.clrNm, it.fdSbjt, it.depPlace, it.foundPlace, ...(it.features ?? [])].some((v) => v?.includes(w)));
     return MOCK_ITEMS.filter(
       (it) =>
         (!q.source || q.source === "all" || it.source === q.source) &&
         (!q.category || it.prdtClNm.startsWith(q.category)) &&
         (!since || new Date(it.fdYmd).getTime() >= since - 86400000) &&
-        (!kw || [it.fdPrdtNm, it.prdtClNm, it.clrNm, it.depPlace, it.foundPlace].some((v) => v?.includes(kw))),
+        hit(it),
     );
   }
   const params = Object.entries(q)
@@ -46,6 +52,16 @@ export async function listItems(q: ListQuery = {}): Promise<FoundItem[]> {
     .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
     .join("&");
   return (await call<{ items: FoundItem[] }>(`/items?${params}`)).items;
+}
+
+/** 홈 화면 숫자: 보관 중인 습득물 수, 오늘 들어온 수 */
+export async function getStats(): Promise<Stats> {
+  if (IS_MOCK) {
+    const today = localYmd();
+    const live = MOCK_ITEMS.filter((it) => it.status === "보관중" || it.status === "현장에 있음");
+    return { total: live.length, today: MOCK_ITEMS.filter((it) => it.fdYmd === today).length };
+  }
+  return call<Stats>("/stats");
 }
 
 export async function getItem(atcId: string, fdSn: string): Promise<FoundItemDetail | null> {

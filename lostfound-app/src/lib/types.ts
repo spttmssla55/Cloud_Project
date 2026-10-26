@@ -95,7 +95,43 @@ export interface ChatRequest {
 export interface QuickReply {
   label: string;
   value: string; // 보낼 메시지
-  action?: "use_location" | "pick_photo";
+  action?: "use_location" | "pick_photo" | "go_mypage";
+}
+
+/* ───────── 사용자 · 잃어버린 물건 · 알림 ───────── */
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/** 챗봇에서 "잃어버렸어요"로 물어보면 저장되는 것 (DB: REQ#<사용자id>) */
+export interface LostItem {
+  id: string;
+  kind: string; // 무선이어폰 …
+  category: string; // 대분류
+  color: string;
+  features: string[];
+  place: string; // 잃어버린 곳
+  createdAt: string; // ISO
+  status: "찾는 중" | "찾음";
+  matchIds: string[]; // 비슷하다고 알려 준 습득물 atcId
+}
+
+/** 비슷한 습득물이 새로 등록됐을 때 가는 알림 */
+export interface Notice {
+  id: string;
+  at: string; // ISO
+  lostId: string;
+  itemId: string; // 습득물 atcId
+  text: string;
+  read: boolean;
+}
+
+export interface Stats {
+  total: number; // 지금 보관 중인 습득물 수
+  today: number; // 오늘 새로 들어온 습득물 수
 }
 
 export interface ChatReply {
@@ -109,4 +145,5 @@ export type BotMessage =
   | { type: "analysis"; analysis: Analysis }
   | { type: "registered"; item: FoundItem }
   | { type: "results"; items: FoundItem[]; title: string }
+  | { type: "lost_saved"; lost: LostItem }
   | { type: "candidate"; item: FoundItem };

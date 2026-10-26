@@ -124,6 +124,7 @@ export default function ChatScreen() {
 
   async function onQuick(q: QuickReply) {
     if (q.action === "pick_photo") return pickPhoto();
+    if (q.action === "go_mypage") return router.push("/my");
     if (q.action === "use_location") {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) return send(q.value); // 거절해도 대화는 이어진다 (서버가 다시 물어봄)
@@ -262,6 +263,19 @@ function BotLine({ msg }: { msg: BotMessage }) {
             </View>
           </View>
         )}
+        {msg.type === "lost_saved" && (
+          <View style={[st.card, { borderColor: C.brand, backgroundColor: C.brandSoft }]}>
+            <Text style={{ color: C.brandDark, fontWeight: "800", fontSize: F.md, marginBottom: 8 }}>📌 잃어버린 물건으로 등록했어요</Text>
+            <View style={{ gap: 4 }}>
+              <KV k="물건" v={`${msg.lost.color} ${msg.lost.kind}`} bold />
+              <KV k="장소" v={msg.lost.place} />
+              {msg.lost.features.length > 0 && <KV k="특징" v={msg.lost.features.join(", ")} />}
+            </View>
+            <Text style={{ color: C.ink2, fontSize: F.sm, marginTop: 10, lineHeight: 21 }}>
+              비슷한 물건이 새로 등록되면 🔔 알림을 보내 드려요. 마이페이지에서 언제든 확인할 수 있어요.
+            </Text>
+          </View>
+        )}
         {msg.type === "results" && (
           <View style={{ gap: 8 }}>
             <View style={st.bubbleBot}>
@@ -298,7 +312,7 @@ function KV({ k, v, bold, color }: { k: string; v?: string; bold?: boolean; colo
   if (!v) return null;
   return (
     <View style={{ flexDirection: "row", gap: 10 }}>
-      <Text style={{ width: 64, color: C.sub, fontSize: F.sm, fontWeight: "600", paddingTop: 1 }}>{k}</Text>
+      <Text style={{ width: 78, color: C.sub, fontSize: F.sm, fontWeight: "600", paddingTop: 1 }}>{k}</Text>
       <Text style={{ flex: 1, color: color ?? C.ink, fontSize: F.md, fontWeight: bold ? "700" : "400", lineHeight: 23 }}>{v}</Text>
     </View>
   );

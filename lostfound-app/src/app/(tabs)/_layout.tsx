@@ -1,9 +1,10 @@
 /**
- * 아래 탭 두 개: 목록 / 챗봇
+ * 아래 탭 네 개: 홈 / 습득물 / 챗봇 / 마이페이지
  */
 import { Tabs } from "expo-router/js-tabs";
 import { Text } from "react-native";
 import { SITE_NAME } from "@/lib/site";
+import { useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 
 const icon = (emoji: string) =>
@@ -12,6 +13,7 @@ const icon = (emoji: string) =>
   };
 
 export default function TabsLayout() {
+  const unread = useApp((s) => s.notices.filter((n) => !n.read).length);
   return (
     <Tabs
       screenOptions={{
@@ -24,8 +26,13 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: C.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: SITE_NAME, tabBarLabel: "목록", tabBarIcon: icon("🗂️") }} />
+      <Tabs.Screen name="index" options={{ title: SITE_NAME, tabBarLabel: "홈", tabBarIcon: icon("🏠") }} />
+      <Tabs.Screen name="items" options={{ title: "습득물", tabBarLabel: "습득물", tabBarIcon: icon("🗂️") }} />
       <Tabs.Screen name="chat" options={{ title: "챗봇으로 등록·찾기", tabBarLabel: "챗봇", tabBarIcon: icon("💬") }} />
+      <Tabs.Screen
+        name="my"
+        options={{ title: "마이페이지", tabBarLabel: "마이페이지", tabBarIcon: icon("👤"), tabBarBadge: unread || undefined }}
+      />
     </Tabs>
   );
 }
