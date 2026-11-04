@@ -5,9 +5,10 @@
  * 목업 모드: 앱을 끄면 사라지는 메모리 저장 (mock-chat.ts 가 addFoundItem / addLost 를 부른다).
  */
 import { useSyncExternalStore } from "react";
-import { apiLogin, apiLostFound, apiMe, apiReadNotices, IS_MOCK, setToken } from "./api";
+import { apiLogin, apiSignup, apiLostFound, apiMe, apiReadNotices, IS_MOCK, setToken } from "./api";
 import { MOCK_ITEMS } from "./mock-data";
-import type { FoundItem, LostItem, Notice, User } from "./types";
+import { loadSession, saveSession } from "./session";
+import type { FoundItem, LostItem, Notice, SignupForm, User } from "./types";
 
 interface AppState {
   user: User | null;
@@ -37,21 +38,46 @@ export function useApp<T>(pick: (s: AppState) => T): T {
 }
 export const getApp = () => state;
 
-/* ───── 로그인 ───── */
-export async function login(name: string, email: string, password: string) {
+/* ───── 로그인 · 회원가입 ───── */
+async function signedIn(token: string, user: User) {
+  setToken(token);
+  set({ user });
+  await saveSession({ token, user }); // 앱을 다시 켜도 로그인 유지
+  await refreshMe();
+}
+
+export async function login(loginId: string, password: string) {
   if (IS_MOCK) {
-    set({ user: { id: `u-${email.toLowerCase()}`, name: name.trim() || email.split("@")[0], email: email.trim() } });
+    set({ user: { id: `u-${loginId}`, name: loginId, loginId } });
     return;
   }
-  const r = await apiLogin(email.trim(), password, name.trim());
-  setToken(r.token);
-  set({ user: r.user });
-  await refreshMe();
+  const r = await apiLogin(loginId.trim(), password);
+  await signedIn(r.token, r.user);
+}
+
+export async function signup(f: SignupForm) {
+  if (IS_MOCK) {
+    set({ user: { id: `u-${f.loginId}`, name: f.nickname, loginId: f.loginId } });
+    return;
+  }
+  const r = await apiSignup({ ...f, nickname: f.nickname.trim(), loginId: f.loginId.trim().toLowerCase() });
+  await signedIn(r.token, r.user);
 }
 
 export function logout() {
   setToken(null);
+  saveSession(null);
   set({ user: null, myItems: [], lost: [], notices: [] });
+}
+
+/** 앱을 켤 때 한 번: 저장해 둔 로그인이 있으면 이어서 (토큰이 만료됐으면 refreshMe 가 로그아웃) */
+export async function restoreSession() {
+  if (IS_MOCK || state.user) return;
+  const s = await loadSession();
+  if (!s) return;
+  setToken(s.token);
+  set({ user: s.user });
+  await refreshMe();
 }
 
 /** 서버에서 마이페이지 데이터 새로 가져오기 (챗봇 등록 뒤, 화면에 들어올 때) */

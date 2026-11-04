@@ -3,65 +3,19 @@
  */
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { LoginForm } from "@/components/auth";
 import { Button, ItemCard } from "@/components/ui";
 import { IS_MOCK } from "@/lib/api";
 import { localYmd, relDate, timeText } from "@/lib/format";
-import { login, logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
+import { logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { LostItem } from "@/lib/types";
 
 export default function MyScreen() {
   const user = useApp((s) => s.user);
+  // 로그인 안 했으면 로그인 폼 (아래에 회원가입 · 아이디 찾기 · 비밀번호 찾기)
   return user ? <MyPage /> : <LoginForm />;
-}
-
-/* ───── 로그인 ───── */
-function LoginForm() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const ok = /\S+@\S+\.\S+/.test(email) && pw.length >= 4;
-
-  async function submit() {
-    setBusy(true);
-    setError("");
-    try {
-      await login(name, email, pw);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-      <Text style={st.h1}>로그인</Text>
-      <Text style={st.lead}>로그인하면 내가 등록한 습득물과 잃어버린 물건을 모아 보고, 비슷한 물건이 들어오면 알림을 받을 수 있어요.</Text>
-
-      <View style={st.form}>
-        <Field label="이름 (선택)" value={name} onChangeText={setName} placeholder="예: 백승범" />
-        <Field label="이메일" value={email} onChangeText={setEmail} placeholder="example@email.com" keyboardType="email-address" autoCapitalize="none" />
-        <Field label="비밀번호" value={pw} onChangeText={setPw} placeholder="4자 이상" secureTextEntry />
-        {!!error && <Text style={st.error}>{error}</Text>}
-        <Button title={busy ? "로그인 중…" : "로그인"} disabled={!ok || busy} onPress={submit} style={{ marginTop: 6 }} />
-        <Text style={st.hint}>처음 쓰는 이메일이면 자동으로 가입돼요.</Text>
-      </View>
-      {IS_MOCK && <Text style={st.mock}>지금은 예시 로그인이에요. 서버를 연결하면 실제 계정으로 로그인돼요.</Text>}
-    </ScrollView>
-  );
-}
-
-function Field({ label, ...props }: { label: string } & React.ComponentProps<typeof TextInput>) {
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={st.label}>{label}</Text>
-      <TextInput {...props} placeholderTextColor={C.faint} style={st.input} accessibilityLabel={label} />
-    </View>
-  );
 }
 
 /* ───── 마이페이지 ───── */
@@ -97,7 +51,7 @@ function MyPage() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={st.name}>{user.name}님</Text>
-          <Text style={st.email}>{user.email}</Text>
+          <Text style={st.email}>아이디 {user.loginId}</Text>
         </View>
         <Pressable onPress={() => Alert.alert("로그아웃할까요?", undefined, [{ text: "취소", style: "cancel" }, { text: "로그아웃", onPress: logout }])} hitSlop={8}>
           <Text style={{ color: C.sub, fontWeight: "700", fontSize: F.sm }}>로그아웃</Text>

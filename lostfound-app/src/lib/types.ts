@@ -56,6 +56,8 @@ export interface ListQuery {
   category?: string; // 대분류 이름 (지갑, 전자기기 …)
   source?: Source | "all";
   days?: number; // 최근 n일
+  from?: string; // 직접 고른 기간 YYYY-MM-DD
+  to?: string;
   photo?: 1; // 사진 있는 것만 (홈 '최근 등록된 습득물')
   page?: number; // 1부터. 아래로 스크롤하면 2, 3 …
   size?: number; // 한 번에 몇 건 (기본 30, 최대 50)
@@ -77,7 +79,7 @@ export type Mode = "register" | "find";
 /** 챗봇이 대화 중에 기억하는 값. 서버(Lambda)가 돌려주고 화면은 다음 요청에 그대로 보낸다 */
 export interface ChatState {
   mode?: Mode;
-  step?: "ask_mode" | "ask_photo" | "ask_found_place" | "ask_current_place" | "ask_same" | "ask_features" | "ask_lost_place" | "done";
+  step?: "ask_mode" | "ask_photo" | "ask_confirm" | "ask_found_place" | "ask_current_place" | "ask_same" | "ask_features" | "ask_pick" | "picked" | "ask_review" | "ask_more" | "ask_save" | "ask_lost_place" | "done";
   imageName?: string;
   analysis?: Analysis;
   foundPlace?: string;
@@ -102,20 +104,32 @@ export interface ChatRequest {
   /** 앱: uri 는 휴대폰 안의 사진 위치, base64 는 서버(Lambda → Bedrock)로 보낼 사진 데이터 */
   image?: { name: string; uri: string; base64?: string };
   location?: { lat: number; lng: number }; // "현재 위치예요" 를 누르면
+  pickId?: string; // 찾기 결과 카드에서 [이거예요] 를 누른 습득물
 }
 
 export interface QuickReply {
   label: string;
   value: string; // 보낼 메시지
-  action?: "use_location" | "pick_photo" | "go_mypage";
+  action?: "use_location" | "pick_photo" | "go_mypage" | "open_items";
+  params?: { category?: string; from?: string; keyword?: string }; // open_items: 습득물 탭을 이 조건으로 연다
 }
 
 /* ───────── 사용자 · 잃어버린 물건 · 알림 ───────── */
 
 export interface User {
   id: string;
-  name: string;
-  email: string;
+  name: string; // 닉네임
+  loginId: string; // 아이디
+}
+
+/** 회원가입 입력 */
+export interface SignupForm {
+  nickname: string;
+  loginId: string;
+  password: string;
+  password2: string;
+  question: string; // 비밀번호 찾기 질문
+  answer: string;
 }
 
 /** 챗봇에서 "잃어버렸어요"로 물어보면 저장되는 것 (DB: REQ#<사용자id>) */
@@ -165,6 +179,7 @@ export type BotMessage =
   | { type: "text"; text: string }
   | { type: "analysis"; analysis: Analysis }
   | { type: "registered"; item: FoundItem }
-  | { type: "results"; items: FoundItem[]; title: string }
+  | { type: "results"; items: FoundItem[]; title: string; pickable?: boolean } // pickable: 카드마다 [이거예요]
+  | { type: "pickup"; item: FoundItem; how: string; tel?: string | null } // [이거예요] → 찾으러 가는 방법
   | { type: "lost_saved"; lost: LostItem }
   | { type: "candidate"; item: FoundItem };

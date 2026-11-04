@@ -7,18 +7,18 @@
  *   수집 기능이 주기적으로 받아 DB(Supabase PostgreSQL)에 저장하고, 앱은 우리 API 만 부른다.
  *
  * 우리 API (Lambda) 약속
- *   GET  /items?keyword=&category=&source=&days=&photo=&page=&size=  → ListPage (30건씩)
+ *   GET  /items?keyword=&category=&source=&days=&from=&to=&photo=&page=&size=  → ListPage (30건씩)
  *   GET  /items/detail?atcId=&fdSn=                → FoundItemDetail
  *   GET  /stats                                    → { total, today }
  *   GET  /me                                       → { user, myItems, lost, notices }   (로그인 후)
  *   POST /chat   ChatRequest                       → ChatReply
- *   POST /auth/login {email, password, name}       → { token, user }   (처음 보는 이메일이면 가입)
+ *   POST /auth/login {loginId, password} · /auth/signup · /auth/check · /auth/question · /auth/find-id · /auth/reset-password
  *   POST /me/notices/read · POST /lost/found {id}
  */
 import { MOCK_ITEMS } from "./mock-data";
 import { mockChat } from "./mock-chat";
 import { hasPhoto, localYmd } from "./format";
-import type { ChatReply, ChatRequest, FoundItem, FoundItemDetail, ListPage, ListQuery, MyData, Stats, User } from "./types";
+import type { ChatReply, ChatRequest, FoundItem, FoundItemDetail, ListPage, ListQuery, MyData, SignupForm, Stats, User } from "./types";
 
 const API = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 export const IS_MOCK = !API;
@@ -40,7 +40,13 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error("인터넷 연결을 확인해 주세요.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || "잠시 후 다시 시도해 주세요.");
+  if (!res.ok) {
+    const d = data as { error?: string; message?: string };
+    // error: 우리 Lambda 가 준 설명 / message: API Gateway 가 준 말 (경로·권한 설정 문제일 때)
+    if (d.error) throw new Error(d.error);
+    if (d.message) throw new Error(`서버 설정 문제예요 (${res.status} ${d.message}). API Gateway 경로·권한을 확인해 주세요.`);
+    throw new Error(`잠시 후 다시 시도해 주세요. (${res.status})`);
+  }
   return data as T;
 }
 
@@ -58,6 +64,8 @@ export async function listItems(q: ListQuery = {}): Promise<ListPage> {
       (it) =>
         (!q.source || q.source === "all" || it.source === q.source) &&
         (!since || new Date(it.fdYmd).getTime() >= since - 86400000) &&
+        (!q.from || it.fdYmd >= q.from) &&
+        (!q.to || it.fdYmd <= q.to) &&
         (!q.photo || hasPhoto(it.fdFilePathImg)) &&
         hit(it),
     );
@@ -99,8 +107,23 @@ export async function sendChat(req: ChatRequest): Promise<ChatReply> {
 }
 
 /* ───── 로그인 · 마이페이지 (서버 모드에서만 부름. 목업은 store.ts 가 처리) ───── */
-export const apiLogin = (email: string, password: string, name: string) =>
-  call<{ token: string; user: User }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password, name }) });
+export const apiLogin = (loginId: string, password: string) =>
+  call<{ token: string; user: User }>("/auth/login", { method: "POST", body: JSON.stringify({ loginId, password }) });
+export const apiSignup = (f: SignupForm) => call<{ token: string; user: User }>("/auth/signup", { method: "POST", body: JSON.stringify(f) });
+/** 중복 확인: { loginId } 또는 { nickname } */
+export const apiCheck = (q: { loginId: string } | { nickname: string }) =>
+  call<{ available: boolean; message: string }>("/auth/check", { method: "POST", body: JSON.stringify(q) });
+export const apiQuestions = () => call<{ questions: string[] }>("/auth/questions", { method: "POST", body: "{}" });
+/** 찾기 1단계: 닉네임(아이디 찾기) 또는 아이디(비밀번호 찾기) → 가입 때 고른 질문 */
+export const apiQuestion = (q: { nickname: string } | { loginId: string }) =>
+  call<{ question: string }>("/auth/question", { method: "POST", body: JSON.stringify(q) });
+export const apiFindId = (nickname: string, answer: string) =>
+  call<{ loginId: string }>("/auth/find-id", { method: "POST", body: JSON.stringify({ nickname, answer }) });
+export const apiResetPassword = (b: { loginId: string; answer: string; password: string; password2: string }) =>
+  call<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: JSON.stringify(b) });
 export const apiMe = () => call<MyData>("/me");
 export const apiReadNotices = () => call<{ ok: boolean }>("/me/notices/read", { method: "POST", body: "{}" });
+/** 사용자 제보 물건: 아직 여기 있어요(here) / 현장에 없어요(gone) / 제 물건이에요(mine, 로그인 필요) */
+export const apiReportItem = (id: string, kind: "here" | "gone" | "mine") =>
+  call<{ ok: boolean; message: string; status?: string }>("/items/report", { method: "POST", body: JSON.stringify({ id, kind }) });
 export const apiLostFound = (id: string) => call<{ ok: boolean }>("/lost/found", { method: "POST", body: JSON.stringify({ id }) });

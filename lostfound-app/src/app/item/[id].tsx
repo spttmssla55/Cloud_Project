@@ -1,11 +1,12 @@
 /**
  * 상세 화면: 맨 위에 "지금 어디 있는지"를 가장 크게
  */
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, SourceBadge, StatusBadge, Thumb } from "@/components/ui";
-import { getItem } from "@/lib/api";
+import { apiReportItem, getItem, IS_MOCK } from "@/lib/api";
+import { useApp } from "@/lib/store";
 import { relDate, timeText } from "@/lib/format";
 import { C, F } from "@/lib/theme";
 import type { FoundItemDetail } from "@/lib/types";
@@ -13,18 +14,41 @@ import type { FoundItemDetail } from "@/lib/types";
 export default function ItemScreen() {
   const { id, sn } = useLocalSearchParams<{ id: string; sn?: string }>();
   const [item, setItem] = useState<FoundItemDetail | null | undefined>(undefined);
+  const [sending, setSending] = useState(false);
+  const loggedIn = useApp((s) => !!s.user);
 
-  useEffect(() => {
+  const load = () =>
     getItem(String(id), String(sn ?? "1"))
       .then(setItem)
       .catch(() => setItem(null));
-  }, [id, sn]);
+  useEffect(() => {
+    load();
+  }, [id, sn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (item === undefined) return <ActivityIndicator style={{ marginTop: 40 }} color={C.brand} />;
   if (item === null) return <Text style={st.missing}>이 습득물을 찾을 수 없어요.</Text>;
 
   const isUser = item.source === "user";
-  const say = (t: string) => Alert.alert(t, "지금은 예시 동작이에요. 서버를 연결하면 실제로 기록돼요.");
+  // 사용자 제보 물건의 버튼 → 서버에 기록하고 결과를 알려 준다
+  async function report(kind: "here" | "gone" | "mine") {
+    if (IS_MOCK) return Alert.alert("예시 모드", "서버(EXPO_PUBLIC_API_URL)를 연결하면 실제로 기록돼요.");
+    if (kind === "mine" && !loggedIn) {
+      return Alert.alert("로그인이 필요해요", "로그인하면 처음 제보한 분께 알려 드릴 수 있어요.", [
+        { text: "취소", style: "cancel" },
+        { text: "로그인하러 가기", onPress: () => router.push("/my") },
+      ]);
+    }
+    setSending(true);
+    try {
+      const r = await apiReportItem(item!.atcId, kind);
+      Alert.alert("알려 주셔서 고마워요", r.message);
+      load(); // 상태·이동 기록 새로 고침
+    } catch (e) {
+      Alert.alert("보내지 못했어요", (e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
@@ -63,10 +87,10 @@ export default function ItemScreen() {
 
       {isUser && (
         <View style={{ gap: 8, marginTop: 18 }}>
-          <Button title="제 물건이에요" onPress={() => say("주인 확인 요청을 보냈어요")} />
+          <Button title="제 물건이에요" disabled={sending} onPress={() => report("mine")} />
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button title="아직 여기 있어요" kind="line" style={{ flex: 1 }} onPress={() => say("아직 있다고 기록했어요")} />
-            <Button title="현장에 없어요" kind="line" style={{ flex: 1 }} onPress={() => say("현장에 없다고 기록했어요")} />
+            <Button title="아직 여기 있어요" kind="line" style={{ flex: 1 }} disabled={sending} onPress={() => report("here")} />
+            <Button title="현장에 없어요" kind="line" style={{ flex: 1 }} disabled={sending} onPress={() => report("gone")} />
           </View>
         </View>
       )}

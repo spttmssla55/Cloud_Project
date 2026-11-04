@@ -95,6 +95,13 @@ export async function mockChat(req: ChatRequest): Promise<ChatReply> {
   const st: ChatState = { ...req.state };
   const text = req.message.trim();
   const place = req.location ? HERE : undefined;
+  if (st.mode && text.length <= 20 && /(취소|그만|안\s*할래|안\s*해요|안\s*할게|안\s*올릴래|안\s*찾을래|관둘|하지\s*말|필요\s*없어)/.test(text)) {
+    return {
+      state: { step: "done" },
+      messages: [{ type: "text", text: `${st.mode === "register" ? "등록" : "찾기"}을 **취소**했어요. 아무것도 저장하지 않았어요.` }],
+      quickReplies: [{ label: "처음으로", value: "__reset__" }],
+    };
+  }
 
   // 0. 등록인지 찾기인지
   if (!st.mode) {

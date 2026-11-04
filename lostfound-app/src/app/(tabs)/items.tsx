@@ -4,9 +4,10 @@
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { DateRangePicker, shortRange, type Range } from "@/components/DateRangePicker";
 import { Chip, ItemCard } from "@/components/ui";
 import { IS_MOCK, listItems } from "@/lib/api";
-import { categoryEmoji } from "@/lib/format";
+import { categoryEmoji, localYmd } from "@/lib/format";
 import { useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { FoundItem, Source } from "@/lib/types";
@@ -21,13 +22,15 @@ const PERIODS = [
   { value: 0, label: "전체 기간" },
   { value: 1, label: "오늘·어제" },
   { value: 7, label: "최근 7일" },
+  { value: 30, label: "최근 30일" },
 ];
 
 const PAGE = 30;
 const SHOW_CATS = 7; // 처음엔 많은 순 7개만, '더보기'로 전체
 
 export default function ItemsScreen() {
-  const params = useLocalSearchParams<{ days?: string }>();
+  // 홈 '오늘 새로 들어온 물건' → days, 챗봇 '비슷한 물건 전체 보기' → category·from·keyword (t 는 같은 조건으로 또 와도 다시 적용하려고)
+  const params = useLocalSearchParams<{ days?: string; category?: string; from?: string; keyword?: string; t?: string }>();
   const version = useApp((s) => s.version);
   const [items, setItems] = useState<FoundItem[] | null>(null);
   const [page, setPage] = useState(1);
@@ -39,21 +42,35 @@ export default function ItemsScreen() {
   const [category, setCategory] = useState<string | undefined>();
   const [source, setSource] = useState<Source | "all">("all");
   const [days, setDays] = useState(0);
+  const [range, setRange] = useState<Range | undefined>(); // 직접 고른 기간 (있으면 days 대신)
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [applied, setApplied] = useState("");
   const reqId = useRef(0); // 조건을 빨리 바꿨을 때 늦게 온 옛 응답은 버린다
 
   // 홈의 "오늘 새로 들어온 물건"을 눌러서 오면 기간을 맞춘다
   useEffect(() => {
-    if (params.days) setDays(Number(params.days));
+    if (params.days) {
+      setDays(Number(params.days));
+      setRange(undefined);
+    }
   }, [params.days]);
+  useEffect(() => {
+    if (!params.t) return;
+    setCategory(params.category || undefined);
+    setKeyword(params.keyword ?? "");
+    setApplied(params.keyword ?? "");
+    setSource("all");
+    setRange(params.from ? { from: params.from, to: localYmd() } : undefined);
+    if (!params.from) setDays(0);
+  }, [params.t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 조건이 바뀌면 1페이지부터 다시 (30건씩)
   useFocusEffect(
     useCallback(() => {
       const id = ++reqId.current;
       setItems(null);
-      listItems({ source, days, keyword: applied, category, page: 1, size: PAGE })
+      listItems({ source, days: range ? 0 : days, from: range?.from, to: range?.to, keyword: applied, category, page: 1, size: PAGE })
         .then((r) => {
           if (id !== reqId.current) return;
           setItems(r.items);
@@ -63,7 +80,7 @@ export default function ItemsScreen() {
           setCounts(r.counts ?? {});
         })
         .catch(() => id === reqId.current && (setItems([]), setHasMore(false)));
-    }, [source, days, applied, category, version]),
+    }, [source, days, range, applied, category, version]),
   );
 
   // 아래 끝까지 스크롤하면 다음 30건
@@ -71,7 +88,7 @@ export default function ItemsScreen() {
     if (!items || !hasMore || loadingMore) return;
     const id = reqId.current;
     setLoadingMore(true);
-    listItems({ source, days, keyword: applied, category, page: page + 1, size: PAGE })
+    listItems({ source, days: range ? 0 : days, from: range?.from, to: range?.to, keyword: applied, category, page: page + 1, size: PAGE })
       .then((r) => {
         if (id !== reqId.current) return;
         setItems((prev) => {
@@ -136,9 +153,16 @@ export default function ItemsScreen() {
       </ChipRow>
       <ChipRow label="기간">
         {PERIODS.map((p) => (
-          <Chip key={p.value} label={p.label} on={days === p.value} onPress={() => setDays(p.value)} />
+          <Chip key={p.value} label={p.label} on={!range && days === p.value} onPress={() => { setRange(undefined); setDays(p.value); }} />
         ))}
+        <Chip label={range ? `📅 ${shortRange(range)}` : "📅 직접 선택"} on={!!range} onPress={() => setPickerOpen(true)} />
       </ChipRow>
+      {range && (
+        <Pressable onPress={() => setRange(undefined)} style={{ marginTop: 8 }} accessibilityRole="button">
+          <Text style={{ color: C.brand, fontSize: F.sm, fontWeight: "700" }}>📅 {shortRange(range)} 습득물만 보는 중 · 지우기 ✕</Text>
+        </Pressable>
+      )}
+      <DateRangePicker visible={pickerOpen} value={range} onClose={() => setPickerOpen(false)} onApply={(r) => { setRange(r); setPickerOpen(false); }} />
 
       <View style={st.countRow}>
         <Text style={st.count}>

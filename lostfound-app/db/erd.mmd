@@ -1,0 +1,74 @@
+erDiagram
+    users ||--o{ found_items : "제보한다 (reporter_id)"
+    users ||--o{ lost_items : "등록한다 (user_id)"
+    users ||--o{ notifications : "받는다 (user_id)"
+    users ||--o{ sightings : "목격한다 (reporter_id)"
+    found_items ||--o{ sightings : "이동 기록 (item_id)"
+    found_items ||--o{ matches : "후보 (item_id)"
+    lost_items ||--o{ matches : "비교 (lost_id)"
+    lost_items ||--o{ notifications : "알림 (lost_id)"
+    found_items ||--o{ notifications : "알림 (item_id)"
+
+    users {
+        uuid id PK
+        text email UK
+        text name
+        text password_hash
+        text push_token
+        timestamptz created_at
+    }
+    found_items {
+        uuid id PK
+        text source "portal / police / user"
+        text ext_atc_id "공공 API 관리ID"
+        text name
+        text category
+        text color
+        text_arr features
+        date found_date
+        text found_place
+        text current_place
+        geography current_geo "PostGIS"
+        text status
+        uuid reporter_id FK
+        vector embedding "pgvector"
+    }
+    sightings {
+        uuid id PK
+        uuid item_id FK
+        uuid reporter_id FK
+        text found_place
+        text current_place
+        text message
+        timestamptz created_at
+    }
+    lost_items {
+        uuid id PK
+        uuid user_id FK
+        text name
+        text category
+        text color
+        text lost_place
+        geography lost_geo
+        text status
+        vector embedding
+    }
+    matches {
+        uuid lost_id PK,FK
+        uuid item_id PK,FK
+        real score
+        text reason
+    }
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        uuid lost_id FK
+        uuid item_id FK
+        text message
+        timestamptz read_at
+    }
+    sync_state {
+        text source PK
+        date last_date
+        timestamptz last_run_at
+    }

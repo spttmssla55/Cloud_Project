@@ -13,6 +13,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -50,6 +51,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const [lines, setLines] = useState<Line[]>([GREETING]);
   const [state, setState] = useState<ChatState>({});
+  const [lastMode, setLastMode] = useState<ChatState["mode"]>(); // 끝나면 서버가 mode 를 지워서, 완료 표시용으로 기억
   const [quick, setQuick] = useState<QuickReply[]>(START_REPLIES);
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<Photo | null>(null);
@@ -69,6 +71,7 @@ export default function ChatScreen() {
   function reset() {
     setLines([GREETING]);
     setState({});
+    setLastMode(undefined);
     setQuick(START_REPLIES);
     setPhoto(null);
   }
@@ -88,6 +91,7 @@ export default function ChatScreen() {
     try {
       const r = await sendChat({ state: fresh?.state ?? state, message, image, ...extra });
       setState(r.state);
+      if (r.state.mode) setLastMode(r.state.mode);
       setLines((l) => [...l, ...r.messages.map((msg) => ({ who: "bot" as const, msg }))]);
       setQuick(r.quickReplies ?? []);
       if (r.state.step === "done") refreshMe(); // 등록·저장이 끝나면 마이페이지·알림 새로 고침
@@ -132,6 +136,7 @@ export default function ChatScreen() {
   async function onQuick(q: QuickReply) {
     if (q.action === "pick_photo") return pickPhoto();
     if (q.action === "go_mypage") return router.push("/my");
+    if (q.action === "open_items") return router.push({ pathname: "/items", params: { ...(q.params ?? {}), t: String(Date.now()) } });
     if (q.action === "use_location") {
       const perm = await Location.requestForegroundPermissionsAsync();
       if (!perm.granted) return send(q.value); // 거절해도 대화는 이어진다 (서버가 다시 물어봄)
@@ -152,12 +157,15 @@ export default function ChatScreen() {
     send(q.value);
   }
 
+  const lastPickable = lines.reduce((at, ln, i) => (ln.who === "bot" && ln.msg.type === "results" && ln.msg.pickable ? i : at), -1);
+
   // 머리글(위)과 탭바(아래) 높이를 빼고 키보드만큼 올린다
   const kbOffset = insets.top + 44 - (49 + insets.bottom);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={kbOffset}>
       {IS_MOCK && <Text style={st.mock}>예시 응답이에요 (AI 연결 전)</Text>}
+      <StepBar state={state} lastMode={lastMode} busy={busy} onCancel={() => { setPhoto(null); send("취소"); }} />
 
       <ScrollView
         ref={scrollRef}
@@ -166,7 +174,18 @@ export default function ChatScreen() {
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
       >
-        {lines.map((ln, i) => (ln.who === "me" ? <MyLine key={i} text={ln.text} image={ln.image} /> : <BotLine key={i} msg={ln.msg} />))}
+        {lines.map((ln, i) =>
+          ln.who === "me" ? (
+            <MyLine key={i} text={ln.text} image={ln.image} />
+          ) : (
+            <BotLine
+              key={i}
+              msg={ln.msg}
+              // [이거예요] 는 지금 고르는 중인 마지막 결과에만
+              onPick={state.step === "ask_pick" && i === lastPickable && !busy ? (id) => send("이거예요", { pickId: id }) : undefined}
+            />
+          ),
+        )}
         {busy && (
           <View style={st.botRow}>
             <Avatar />
@@ -227,6 +246,60 @@ export default function ChatScreen() {
   );
 }
 
+/** 등록·찾기가 몇 단계 중 어디인지 (예: 습득물 등록 2/3 · 발견한 곳) */
+const STEPS: Record<string, { title: string; steps: { key: string[]; label: string }[] }> = {
+  register: {
+    title: "습득물 등록",
+    steps: [
+      { key: ["ask_photo"], label: "사진 보내기" },
+      { key: ["ask_confirm"], label: "물건 확인" },
+      { key: ["ask_found_place"], label: "발견한 곳" },
+      { key: ["ask_current_place", "ask_same"], label: "지금 위치" },
+    ],
+  },
+  find: {
+    title: "분실물 찾기",
+    steps: [
+      { key: ["ask_features"], label: "물건 설명" },
+      { key: ["ask_pick", "picked"], label: "비슷한 물건 보기" },
+      { key: ["ask_lost_place", "ask_review", "ask_more", "ask_save"], label: "등록하고 알림 받기" },
+    ],
+  },
+};
+
+function StepBar({ state, lastMode, busy, onCancel }: { state: ChatState; lastMode?: ChatState["mode"]; busy: boolean; onCancel: () => void }) {
+  const mode = state.mode ?? (state.step === "done" ? lastMode : undefined);
+  const flow = mode ? STEPS[mode] : undefined;
+  if (!flow || !state.step || state.step === "ask_mode") return null;
+  const done = state.step === "done";
+  const idx = flow.steps.findIndex((s) => s.key.includes(state.step!));
+  const now = done ? flow.steps.length : idx + 1;
+  if (now <= 0) return null;
+  const label = done ? "완료" : flow.steps[now - 1].label;
+  return (
+    <View style={st.stepBox} accessibilityRole="progressbar" accessibilityLabel={`${flow.title} ${now}/${flow.steps.length} 단계, ${label}`}>
+      <View style={st.stepHead}>
+        <Text style={st.stepTitle}>{flow.title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Text style={st.stepNow}>
+            <Text style={{ color: C.brand }}>{now}</Text>/{flow.steps.length} · {label}
+          </Text>
+          {!done && (
+            <Pressable onPress={onCancel} disabled={busy} style={[st.cancel, busy && { opacity: 0.4 }]} accessibilityRole="button" accessibilityLabel={`${flow.title} 취소`} hitSlop={8}>
+              <Text style={st.cancelText}>취소</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+      <View style={st.stepBars}>
+        {flow.steps.map((s, i) => (
+          <View key={s.label} style={[st.stepSeg, i < now && { backgroundColor: done ? C.ok : C.brand }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function MyLine({ text, image }: { text: string; image?: string }) {
   return (
     <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -240,7 +313,7 @@ function MyLine({ text, image }: { text: string; image?: string }) {
   );
 }
 
-function BotLine({ msg }: { msg: BotMessage }) {
+function BotLine({ msg, onPick }: { msg: BotMessage; onPick?: (id: string) => void }) {
   return (
     <View style={st.botRow}>
       <Avatar />
@@ -289,8 +362,28 @@ function BotLine({ msg }: { msg: BotMessage }) {
               <Text style={{ fontSize: F.md, fontWeight: "700", color: C.ink }}>{msg.title}</Text>
             </View>
             {msg.items.map((it) => (
-              <ItemCard key={`${it.atcId}-${it.fdSn}`} item={it} />
+              <View key={`${it.atcId}-${it.fdSn}`} style={{ gap: 6 }}>
+                <ItemCard item={it} />
+                {onPick && (
+                  <Pressable onPress={() => onPick(it.atcId)} style={({ pressed }) => [st.pickBtn, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`${it.fdPrdtNm}, 내 물건이에요`}>
+                    <Text style={st.pickText}>🙋 이거예요</Text>
+                  </Pressable>
+                )}
+              </View>
             ))}
+          </View>
+        )}
+        {msg.type === "pickup" && (
+          <View style={[st.card, { borderColor: C.ok, backgroundColor: C.okSoft, gap: 10 }]}>
+            <Text style={{ color: C.ok, fontWeight: "800", fontSize: F.md }}>🎉 찾으러 가는 방법</Text>
+            <ItemCard item={msg.item} />
+            <Rich text={msg.how} />
+            {!!msg.tel && (
+              <Pressable onPress={() => Linking.openURL(`tel:${msg.tel}`)} style={({ pressed }) => [st.callBtn, pressed && { opacity: 0.8 }]} accessibilityRole="button">
+                <Text style={st.callText}>📞 전화하기 {msg.tel}</Text>
+              </Pressable>
+            )}
+            <Text style={st.small}>카드를 누르면 자세한 정보를 볼 수 있어요.</Text>
           </View>
         )}
       </View>
@@ -351,6 +444,18 @@ function Avatar() {
 }
 
 const st = StyleSheet.create({
+  pickBtn: { alignSelf: "flex-end", paddingHorizontal: 16, minHeight: 42, borderRadius: 999, backgroundColor: C.brand, justifyContent: "center" },
+  pickText: { color: "#fff", fontWeight: "800", fontSize: F.sm },
+  callBtn: { minHeight: 50, borderRadius: 14, backgroundColor: C.ok, alignItems: "center", justifyContent: "center" },
+  callText: { color: "#fff", fontWeight: "800", fontSize: F.md },
+  stepBox: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.line },
+  stepHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  stepTitle: { fontSize: F.sm, fontWeight: "700", color: C.sub },
+  stepNow: { fontSize: F.md, fontWeight: "800", color: C.ink },
+  cancel: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, backgroundColor: C.bg },
+  cancelText: { fontSize: F.sm, fontWeight: "700", color: C.ink2 },
+  stepBars: { flexDirection: "row", gap: 6, marginTop: 8 },
+  stepSeg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: C.line },
   mock: { textAlign: "center", fontSize: F.xs, color: C.sub, paddingVertical: 6, backgroundColor: C.line },
   botRow: { flexDirection: "row", gap: 8, alignItems: "flex-start", paddingRight: 24 },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
