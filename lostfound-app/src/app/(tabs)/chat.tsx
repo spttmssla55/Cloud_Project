@@ -2,6 +2,7 @@
  * 챗봇 탭: 챗봇 하나로 등록(주운 사람)과 찾기(잃어버린 사람)를 둘 다 한다.
  * 빠진 정보(사진·발견 장소·현재 위치)만 골라서 묻고, 사진은 카메라로 바로 찍는다.
  */
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
@@ -25,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ItemCard, Thumb } from "@/components/ui";
 import { IS_MOCK, sendChat } from "@/lib/api";
+import { refreshMe } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { Analysis, BotMessage, ChatRequest, ChatState, QuickReply } from "@/lib/types";
 
@@ -88,6 +90,7 @@ export default function ChatScreen() {
       setState(r.state);
       setLines((l) => [...l, ...r.messages.map((msg) => ({ who: "bot" as const, msg }))]);
       setQuick(r.quickReplies ?? []);
+      if (r.state.step === "done") refreshMe(); // 등록·저장이 끝나면 마이페이지·알림 새로 고침
     } catch (e) {
       setLines((l) => [...l, { who: "bot", msg: { type: "text", text: (e as Error).message } }]);
     } finally {
@@ -100,11 +103,15 @@ export default function ChatScreen() {
     const take = async (camera: boolean) => {
       const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) return Alert.alert(camera ? "카메라 권한이 필요해요" : "사진 접근 권한이 필요해요", "설정에서 권한을 켜 주세요.");
-      const opts: ImagePicker.ImagePickerOptions = { quality: 0.6, base64: true, mediaTypes: ["images"] };
+      const opts: ImagePicker.ImagePickerOptions = { quality: 1, mediaTypes: ["images"] };
       const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       if (r.canceled) return;
       const a = r.assets[0];
-      setPhoto({ name: a.fileName ?? "photo.jpg", uri: a.uri, base64: a.base64 ?? undefined });
+      // 긴 변 1280px · JPEG 70% 로 줄여서 보낸다 (업로드 빠르게, S3·Bedrock 비용 절약, 분석에는 충분)
+      const ctx = ImageManipulator.manipulate(a.uri);
+      if (Math.max(a.width, a.height) > 1280) ctx.resize(a.width >= a.height ? { width: 1280 } : { height: 1280 });
+      const small = await (await ctx.renderAsync()).saveAsync({ compress: 0.7, format: SaveFormat.JPEG, base64: true });
+      setPhoto({ name: "photo.jpg", uri: small.uri, base64: small.base64 ?? undefined });
     };
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(

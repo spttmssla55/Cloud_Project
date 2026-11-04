@@ -7,7 +7,7 @@
 /** 어디서 온 습득물인지 */
 export type Source = "portal" | "police" | "user";
 // portal: 경찰청_포털기관 습득물 (지하철·공항·쇼핑몰·놀이공원)
-// police: 경찰청_습득물 (승인 후 추가)
+// police: 경찰청_습득물 (전국 경찰서·지구대)
 // user:   우리 서비스 사용자 제보
 
 /** 보관 상태 */
@@ -56,6 +56,18 @@ export interface ListQuery {
   category?: string; // 대분류 이름 (지갑, 전자기기 …)
   source?: Source | "all";
   days?: number; // 최근 n일
+  photo?: 1; // 사진 있는 것만 (홈 '최근 등록된 습득물')
+  page?: number; // 1부터. 아래로 스크롤하면 2, 3 …
+  size?: number; // 한 번에 몇 건 (기본 30, 최대 50)
+}
+
+/** GET /items 응답 한 페이지 */
+export interface ListPage {
+  items: FoundItem[];
+  page: number;
+  hasMore: boolean; // 다음 페이지가 있는지
+  total?: number; // page=1 일 때만: 조건에 맞는 전체 수
+  counts?: Record<string, number>; // page=1 일 때만: 종류별 수 (종류 필터 빼고)
 }
 
 /* ───────── 챗봇 ───────── */
@@ -117,6 +129,15 @@ export interface LostItem {
   createdAt: string; // ISO
   status: "찾는 중" | "찾음";
   matchIds: string[]; // 비슷하다고 알려 준 습득물 atcId
+  matches?: FoundItem[]; // 서버가 같이 보내 주는 비슷한 습득물
+}
+
+/** GET /me */
+export interface MyData {
+  user: User;
+  myItems: FoundItem[];
+  lost: LostItem[];
+  notices: Notice[];
 }
 
 /** 비슷한 습득물이 새로 등록됐을 때 가는 알림 */

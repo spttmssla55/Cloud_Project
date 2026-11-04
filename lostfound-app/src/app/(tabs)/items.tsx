@@ -1,13 +1,12 @@
 /**
- * 습득물 탭: 검색 + 카테고리별 보기 + 목록
+ * 습득물 탭: 검색 + 카테고리별 보기 + 목록 (30건씩, 아래로 스크롤하면 더)
  */
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Chip, ItemCard } from "@/components/ui";
 import { IS_MOCK, listItems } from "@/lib/api";
 import { categoryEmoji } from "@/lib/format";
-import { CATEGORIES } from "@/lib/mock-data";
 import { useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { FoundItem, Source } from "@/lib/types";
@@ -16,7 +15,7 @@ const SOURCES: { value: Source | "all"; label: string; disabled?: boolean }[] = 
   { value: "all", label: "전체" },
   { value: "portal", label: "지하철·공항·쇼핑몰" },
   { value: "user", label: "사용자 제보" },
-  { value: "police", label: "경찰서 (준비 중)", disabled: true },
+  { value: "police", label: "경찰서" },
 ];
 const PERIODS = [
   { value: 0, label: "전체 기간" },
@@ -24,38 +23,72 @@ const PERIODS = [
   { value: 7, label: "최근 7일" },
 ];
 
+const PAGE = 30;
+const SHOW_CATS = 7; // 처음엔 많은 순 7개만, '더보기'로 전체
+
 export default function ItemsScreen() {
   const params = useLocalSearchParams<{ days?: string }>();
   const version = useApp((s) => s.version);
-  const [all, setAll] = useState<FoundItem[] | null>(null);
+  const [items, setItems] = useState<FoundItem[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [total, setTotal] = useState<number | undefined>();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [moreCats, setMoreCats] = useState(false);
   const [category, setCategory] = useState<string | undefined>();
   const [source, setSource] = useState<Source | "all">("all");
   const [days, setDays] = useState(0);
   const [keyword, setKeyword] = useState("");
   const [applied, setApplied] = useState("");
+  const reqId = useRef(0); // 조건을 빨리 바꿨을 때 늦게 온 옛 응답은 버린다
 
   // 홈의 "오늘 새로 들어온 물건"을 눌러서 오면 기간을 맞춘다
   useEffect(() => {
     if (params.days) setDays(Number(params.days));
   }, [params.days]);
 
-  // 기간·출처·검색어로 서버에서 가져오고, 종류는 화면에서 나눈다 (종류별 개수를 보여 주려고)
+  // 조건이 바뀌면 1페이지부터 다시 (30건씩)
   useFocusEffect(
     useCallback(() => {
-      setAll(null);
-      listItems({ source, days, keyword: applied }).then(setAll).catch(() => setAll([]));
-    }, [source, days, applied, version]),
+      const id = ++reqId.current;
+      setItems(null);
+      listItems({ source, days, keyword: applied, category, page: 1, size: PAGE })
+        .then((r) => {
+          if (id !== reqId.current) return;
+          setItems(r.items);
+          setPage(1);
+          setHasMore(r.hasMore);
+          setTotal(r.total);
+          setCounts(r.counts ?? {});
+        })
+        .catch(() => id === reqId.current && (setItems([]), setHasMore(false)));
+    }, [source, days, applied, category, version]),
   );
 
-  const counts = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const it of all ?? []) {
-      const c = it.prdtClNm.split(">")[0].trim();
-      m[c] = (m[c] ?? 0) + 1;
-    }
-    return m;
-  }, [all]);
-  const shown = (all ?? []).filter((it) => !category || it.prdtClNm.startsWith(category));
+  // 아래 끝까지 스크롤하면 다음 30건
+  const loadMore = () => {
+    if (!items || !hasMore || loadingMore) return;
+    const id = reqId.current;
+    setLoadingMore(true);
+    listItems({ source, days, keyword: applied, category, page: page + 1, size: PAGE })
+      .then((r) => {
+        if (id !== reqId.current) return;
+        setItems((prev) => {
+          const seen = new Set((prev ?? []).map((it) => it.atcId));
+          return [...(prev ?? []), ...r.items.filter((it) => !seen.has(it.atcId))];
+        });
+        setPage(r.page);
+        setHasMore(r.hasMore);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  };
+
+  // 종류: 서버가 준 개수 많은 순. 선택한 종류는 접혀 있어도 보이게
+  const cats = useMemo(() => Object.entries(counts).sort((a, b) => b[1] - a[1]), [counts]);
+  const allCount = useMemo(() => cats.reduce((n, [, c]) => n + c, 0), [cats]);
+  const visibleCats = moreCats ? cats : cats.filter(([c], i) => i < SHOW_CATS || c === category);
 
   const header = (
     <View style={{ padding: 16, paddingBottom: 8 }}>
@@ -81,14 +114,19 @@ export default function ItemsScreen() {
         </Pressable>
       )}
 
-      {/* 카테고리 */}
+      {/* 카테고리 (개수 많은 순) */}
       <Text style={st.label}>카테고리</Text>
       <View style={st.grid}>
-        <CatTile emoji="🧺" name="전체" count={all?.length} on={!category} onPress={() => setCategory(undefined)} />
-        {CATEGORIES.map((c) => (
-          <CatTile key={c} emoji={categoryEmoji(c)} name={c} count={counts[c] ?? 0} on={category === c} onPress={() => setCategory(category === c ? undefined : c)} />
+        <CatTile emoji="🧺" name="전체" count={allCount} on={!category} onPress={() => setCategory(undefined)} />
+        {visibleCats.map(([c, n]) => (
+          <CatTile key={c} emoji={categoryEmoji(c)} name={c} count={n} on={category === c} onPress={() => setCategory(category === c ? undefined : c)} />
         ))}
       </View>
+      {cats.length > SHOW_CATS && (
+        <Pressable onPress={() => setMoreCats(!moreCats)} style={st.moreCats} accessibilityRole="button">
+          <Text style={st.moreCatsText}>{moreCats ? "접기 ▲" : `카테고리 ${cats.length - SHOW_CATS}개 더보기 ▼`}</Text>
+        </Pressable>
+      )}
 
       {/* 출처 · 기간 */}
       <ChipRow label="어디서 온 물건">
@@ -103,7 +141,9 @@ export default function ItemsScreen() {
       </ChipRow>
 
       <View style={st.countRow}>
-        <Text style={st.count}>{category ?? "전체"} {all ? `${shown.length}건` : ""}</Text>
+        <Text style={st.count}>
+          {category ?? "전체"} {total !== undefined && items ? `${total.toLocaleString()}건` : ""}
+        </Text>
         {IS_MOCK && <Text style={st.mock}>예시 데이터</Text>}
       </View>
     </View>
@@ -111,7 +151,7 @@ export default function ItemsScreen() {
 
   return (
     <FlatList
-      data={shown}
+      data={items ?? []}
       keyExtractor={(it) => `${it.atcId}-${it.fdSn}`}
       renderItem={({ item }) => (
         <View style={{ paddingHorizontal: 16 }}>
@@ -123,8 +163,25 @@ export default function ItemsScreen() {
       contentContainerStyle={{ paddingBottom: 32 }}
       style={{ backgroundColor: C.bg }}
       keyboardShouldPersistTaps="handled"
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.6}
+      ListFooterComponent={
+        items && items.length > 0 ? (
+          <View style={st.footer}>
+            {loadingMore ? (
+              <ActivityIndicator color={C.brand} />
+            ) : hasMore ? (
+              <Pressable onPress={loadMore} style={st.moreBtn} accessibilityRole="button">
+                <Text style={st.moreBtnText}>더 보기 ({items.length.toLocaleString()} / {(total ?? items.length).toLocaleString()})</Text>
+              </Pressable>
+            ) : (
+              <Text style={st.endText}>마지막 물건이에요 · {items.length.toLocaleString()}건</Text>
+            )}
+          </View>
+        ) : undefined
+      }
       ListEmptyComponent={
-        !all ? (
+        !items ? (
           <ActivityIndicator style={{ marginTop: 24 }} color={C.brand} />
         ) : (
           <View style={st.emptyBox}>
@@ -172,6 +229,12 @@ const st = StyleSheet.create({
   countRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18 },
   count: { fontSize: F.lg, fontWeight: "800", color: C.ink },
   mock: { fontSize: F.xs, color: C.sub, backgroundColor: C.line, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: "hidden" },
+  moreCats: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 14 },
+  moreCatsText: { fontSize: F.sm, fontWeight: "700", color: C.brand },
+  footer: { paddingVertical: 18, alignItems: "center" },
+  moreBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 999, borderWidth: 1, borderColor: C.line, backgroundColor: C.card },
+  moreBtnText: { fontSize: F.sm, fontWeight: "700", color: C.ink2 },
+  endText: { fontSize: F.sm, color: C.sub },
   emptyBox: { marginHorizontal: 16, padding: 24, backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.line },
   emptyTitle: { fontSize: F.md, fontWeight: "700", color: C.ink, textAlign: "center" },
   emptySub: { fontSize: F.sm, color: C.sub, textAlign: "center", marginTop: 6, lineHeight: 22 },

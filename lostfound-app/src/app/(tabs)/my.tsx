@@ -7,8 +7,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { Button, ItemCard } from "@/components/ui";
 import { IS_MOCK } from "@/lib/api";
 import { localYmd, relDate, timeText } from "@/lib/format";
-import { MOCK_ITEMS } from "@/lib/mock-data";
-import { login, logout, markLostFound, readAllNotices, useApp } from "@/lib/store";
+import { login, logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { LostItem } from "@/lib/types";
 
@@ -22,7 +21,21 @@ function LoginForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const ok = /\S+@\S+\.\S+/.test(email) && pw.length >= 4;
+
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      await login(name, email, pw);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
@@ -33,7 +46,9 @@ function LoginForm() {
         <Field label="이름 (선택)" value={name} onChangeText={setName} placeholder="예: 백승범" />
         <Field label="이메일" value={email} onChangeText={setEmail} placeholder="example@email.com" keyboardType="email-address" autoCapitalize="none" />
         <Field label="비밀번호" value={pw} onChangeText={setPw} placeholder="4자 이상" secureTextEntry />
-        <Button title="로그인" disabled={!ok} onPress={() => login(name, email)} style={{ marginTop: 6 }} />
+        {!!error && <Text style={st.error}>{error}</Text>}
+        <Button title={busy ? "로그인 중…" : "로그인"} disabled={!ok || busy} onPress={submit} style={{ marginTop: 6 }} />
+        <Text style={st.hint}>처음 쓰는 이메일이면 자동으로 가입돼요.</Text>
       </View>
       {IS_MOCK && <Text style={st.mock}>지금은 예시 로그인이에요. 서버를 연결하면 실제 계정으로 로그인돼요.</Text>}
     </ScrollView>
@@ -54,9 +69,15 @@ function MyPage() {
   const user = useApp((s) => s.user)!;
   const notices = useApp((s) => s.notices);
   const lost = useApp((s) => s.lost);
-  const myIds = useApp((s) => s.myFoundIds);
-  const myItems = MOCK_ITEMS.filter((it) => myIds.includes(it.atcId));
+  const myItems = useApp((s) => s.myItems);
   const unread = notices.filter((n) => !n.read).length;
+
+  // 화면에 들어올 때마다 서버에서 새로 가져오기 (새 알림 확인)
+  useFocusEffect(
+    useCallback(() => {
+      refreshMe();
+    }, []),
+  );
 
   // 마이페이지를 보면 알림을 읽은 것으로 처리 (조금 뒤에, 새 알림 표시를 한 번은 보게)
   useFocusEffect(
@@ -128,7 +149,7 @@ function MyPage() {
 
 function LostCard({ lost }: { lost: LostItem }) {
   const [open, setOpen] = useState(false);
-  const matches = MOCK_ITEMS.filter((it) => lost.matchIds.includes(it.atcId));
+  const matches = lost.matches ?? [];
   const done = lost.status === "찾음";
   return (
     <View style={[st.lost, done && { opacity: 0.6 }]}>
@@ -177,6 +198,8 @@ const st = StyleSheet.create({
   form: { marginTop: 22, gap: 14, padding: 18, backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.line },
   label: { fontSize: F.sm, color: C.sub, fontWeight: "600" },
   input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, fontSize: F.md, color: C.ink, backgroundColor: C.card },
+  error: { color: "#C0392B", fontSize: F.sm, fontWeight: "600" },
+  hint: { color: C.sub, fontSize: F.xs, textAlign: "center" },
   mock: { fontSize: F.xs, color: C.sub, marginTop: 12, textAlign: "center", lineHeight: 19 },
   profile: { flexDirection: "row", alignItems: "center", gap: 14, padding: 16, backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.line },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },

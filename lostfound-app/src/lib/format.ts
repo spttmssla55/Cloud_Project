@@ -29,10 +29,15 @@ export function timeText(iso: string): string {
   return `${relDate(localYmd(d))} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/** 대분류마다 기본 그림 (사진이 없을 때) */
+/** 대분류마다 기본 그림 (사진이 없을 때) — 경찰청 물품분류 기준 */
+const CAT_EMOJI = {
+  지갑: "👛", 휴대폰: "📱", 전자기기: "🎧", 컴퓨터: "💻", 카드: "💳", 증명서: "🛂", 가방: "🎒", 우산: "☂️",
+  의류: "👕", 귀금속: "💍", 현금: "💵", 유가증권: "🧾", 서류: "📄", 도서용품: "📚", 쇼핑백: "🛍️",
+  스포츠용품: "⚽", 악기: "🎸", 산업용품: "🧰", 자동차: "🔑", 기타물품: "📦", 기타: "📦", 유류품: "🧳", 무주물: "📦",
+};
 export function categoryEmoji(prdtClNm: string): string {
   const c = prdtClNm.split(">")[0].trim();
-  return ({ 지갑: "👛", 휴대폰: "📱", 전자기기: "🎧", 카드: "💳", 증명서: "🛂", 가방: "🎒", 우산: "☂️" } as Record<string, string>)[c] ?? "📦";
+  return (CAT_EMOJI as Record<string, string>)[c] ?? "📦";
 }
 
 /** 공공 API 의 "사진 없음" 기본 그림은 사진으로 치지 않는다 */

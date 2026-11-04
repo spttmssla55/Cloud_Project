@@ -1,25 +1,23 @@
 /**
  * 앱 안에서 기억하는 값: 로그인한 사용자, 내가 등록한 습득물, 잃어버린 물건, 알림.
  *
- * 지금(목업)은 앱을 끄면 사라지는 메모리 저장이다.
- * 서버를 연결하면 이 값들은 DynamoDB 에 저장되고, 앱은 화면에 보여 주기만 한다.
- *   - 내가 등록한 습득물: ITEM#<id> 의 reporterId = 내 id
- *   - 잃어버린 물건:     REQ#<내 id> / <시각>
- *   - 알림:             새 습득물이 등록될 때 서버(매칭 Lambda)가 REQ 와 비교해서 만든다 → 푸시 알림
+ * 서버 모드(EXPO_PUBLIC_API_URL 있음): 값은 DB 에 있고, refreshMe() 가 GET /me 로 가져와서 화면에 보여 준다.
+ * 목업 모드: 앱을 끄면 사라지는 메모리 저장 (mock-chat.ts 가 addFoundItem / addLost 를 부른다).
  */
 import { useSyncExternalStore } from "react";
+import { apiLogin, apiLostFound, apiMe, apiReadNotices, IS_MOCK, setToken } from "./api";
 import { MOCK_ITEMS } from "./mock-data";
 import type { FoundItem, LostItem, Notice, User } from "./types";
 
 interface AppState {
   user: User | null;
-  myFoundIds: string[]; // 내가 등록한 습득물 atcId
-  lost: LostItem[]; // 내가 잃어버린 물건
+  myItems: FoundItem[]; // 내가 등록한 습득물
+  lost: LostItem[]; // 내가 잃어버린 물건 (matches 포함)
   notices: Notice[];
-  version: number; // 습득물 목록이 바뀔 때마다 +1 (화면 새로 고침용)
+  version: number; // 습득물이 바뀔 때마다 +1 (홈 숫자·목록 새로 고침용)
 }
 
-let state: AppState = { user: null, myFoundIds: [], lost: [], notices: [], version: 0 };
+let state: AppState = { user: null, myItems: [], lost: [], notices: [], version: 0 };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<AppState>) {
@@ -39,18 +37,58 @@ export function useApp<T>(pick: (s: AppState) => T): T {
 }
 export const getApp = () => state;
 
-/* ───── 로그인 (지금은 예시: 이름·이메일만 받음) ───── */
-export function login(name: string, email: string) {
-  set({ user: { id: `u-${email.toLowerCase()}`, name: name.trim() || email.split("@")[0], email: email.trim() } });
-}
-export function logout() {
-  set({ user: null });
+/* ───── 로그인 ───── */
+export async function login(name: string, email: string, password: string) {
+  if (IS_MOCK) {
+    set({ user: { id: `u-${email.toLowerCase()}`, name: name.trim() || email.split("@")[0], email: email.trim() } });
+    return;
+  }
+  const r = await apiLogin(email.trim(), password, name.trim());
+  setToken(r.token);
+  set({ user: r.user });
+  await refreshMe();
 }
 
-/* ───── 습득물 등록 → 잃어버린 물건과 비교해서 알림 ───── */
+export function logout() {
+  setToken(null);
+  set({ user: null, myItems: [], lost: [], notices: [] });
+}
+
+/** 서버에서 마이페이지 데이터 새로 가져오기 (챗봇 등록 뒤, 화면에 들어올 때) */
+export async function refreshMe() {
+  if (IS_MOCK || !state.user) return;
+  try {
+    const me = await apiMe();
+    set({ user: me.user, myItems: me.myItems, lost: me.lost, notices: me.notices, version: state.version + 1 });
+  } catch (e) {
+    if (String((e as Error).message).includes("로그인")) logout(); // 토큰이 만료·위조
+  }
+}
+
+export async function markLostFound(id: string) {
+  if (!IS_MOCK) {
+    await apiLostFound(id);
+    return refreshMe();
+  }
+  set({ lost: state.lost.map((l) => (l.id === id ? { ...l, status: "찾음" } : l)) });
+}
+
+export async function readAllNotices() {
+  if (!IS_MOCK) {
+    await apiReadNotices().catch(() => {});
+    return refreshMe();
+  }
+  set({ notices: state.notices.map((n) => ({ ...n, read: true })) });
+}
+
+/* ───── 아래는 목업 모드 전용 (실제로는 서버의 chat.py · matching.py 가 한다) ───── */
+
+/** 습득물 등록 → 잃어버린 물건과 비교해서 알림 */
 export function addFoundItem(item: FoundItem) {
-  MOCK_ITEMS.unshift({ ...item, sightings: [{ at: new Date().toISOString(), foundPlace: item.foundPlace ?? item.depPlace, currentPlace: item.currentPlace ?? item.depPlace, note: item.fdSbjt }] });
-  const mine = state.user ? [item.atcId, ...state.myFoundIds] : state.myFoundIds;
+  MOCK_ITEMS.unshift({
+    ...item,
+    sightings: [{ at: new Date().toISOString(), foundPlace: item.foundPlace ?? item.depPlace, currentPlace: item.currentPlace ?? item.depPlace, note: item.fdSbjt }],
+  });
   const notices = [...state.notices];
   const lost = state.lost.map((l) => {
     if (l.status !== "찾는 중" || !isSimilar(l, item)) return l;
@@ -62,28 +100,29 @@ export function addFoundItem(item: FoundItem) {
       text: `잃어버린 ‘${l.color} ${l.kind}’과 비슷한 물건이 등록됐어요. 지금 위치: ${item.currentPlace ?? item.depPlace}`,
       read: false,
     });
-    return { ...l, matchIds: [item.atcId, ...l.matchIds] };
+    return { ...l, matchIds: [item.atcId, ...l.matchIds], matches: [item, ...(l.matches ?? [])] };
   });
-  set({ myFoundIds: mine, lost, notices, version: state.version + 1 });
+  set({ myItems: state.user ? [item, ...state.myItems] : state.myItems, lost, notices, version: state.version + 1 });
 }
 
-/** 같은 종류 + (색이 같거나 특징이 겹치면) 비슷하다고 본다. 실제로는 이미지 임베딩 + 위치 거리 */
+/** 같은 종류 + (색이 같거나 특징이 겹치면) 비슷하다고 본다. 서버는 이미지 임베딩 + 위치 거리까지 본다 */
 export function isSimilar(l: Pick<LostItem, "category" | "color" | "features">, it: FoundItem): boolean {
   if (!it.prdtClNm.startsWith(l.category)) return false;
-  const color = !!it.clrNm && (it.clrNm.includes(l.color) || l.color.includes(it.clrNm.split("(")[0]));
+  const color = !!it.clrNm && !!l.color && (it.clrNm.includes(l.color) || l.color.includes(it.clrNm.split("(")[0]));
   const feature = l.features.some((f) => (it.features ?? []).some((g) => g.includes(f) || f.includes(g)) || it.fdSbjt.includes(f));
   return color || feature;
 }
 
-/* ───── 잃어버린 물건 등록 ───── */
+/** 잃어버린 물건 등록 */
 export function addLost(l: Omit<LostItem, "id" | "createdAt" | "status" | "matchIds">, matchIds: string[]): LostItem {
-  const item: LostItem = { ...l, id: `L${Date.now()}`, createdAt: new Date().toISOString(), status: "찾는 중", matchIds };
+  const item: LostItem = {
+    ...l,
+    id: `L${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    status: "찾는 중",
+    matchIds,
+    matches: MOCK_ITEMS.filter((it) => matchIds.includes(it.atcId)),
+  };
   set({ lost: [item, ...state.lost] });
   return item;
-}
-export function markLostFound(id: string) {
-  set({ lost: state.lost.map((l) => (l.id === id ? { ...l, status: "찾음" } : l)) });
-}
-export function readAllNotices() {
-  set({ notices: state.notices.map((n) => ({ ...n, read: true })) });
 }
