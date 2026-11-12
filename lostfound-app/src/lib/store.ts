@@ -16,9 +16,10 @@ interface AppState {
   lost: LostItem[]; // 내가 잃어버린 물건 (matches 포함)
   notices: Notice[];
   version: number; // 습득물이 바뀔 때마다 +1 (홈 숫자·목록 새로 고침용)
+  meError: string; // 마이페이지를 못 불러왔을 때 이유 (조용히 넘기지 않고 화면에 보여 준다)
 }
 
-let state: AppState = { user: null, myItems: [], lost: [], notices: [], version: 0 };
+let state: AppState = { user: null, myItems: [], lost: [], notices: [], version: 0, meError: "" };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<AppState>) {
@@ -85,9 +86,11 @@ export async function refreshMe() {
   if (IS_MOCK || !state.user) return;
   try {
     const me = await apiMe();
-    set({ user: me.user, myItems: me.myItems, lost: me.lost, notices: me.notices, version: state.version + 1 });
+    set({ user: me.user, myItems: me.myItems, lost: me.lost, notices: me.notices, version: state.version + 1, meError: "" });
   } catch (e) {
-    if (String((e as Error).message).includes("로그인")) logout(); // 토큰이 만료·위조
+    const msg = String((e as Error).message);
+    if (msg.includes("로그인이 필요")) return logout(); // 토큰이 만료·위조
+    set({ meError: msg }); // 그 밖의 에러는 마이페이지에 보여 준다
   }
 }
 

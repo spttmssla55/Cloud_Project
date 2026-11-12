@@ -11,7 +11,7 @@ export type Source = "portal" | "police" | "user";
 // user:   우리 서비스 사용자 제보
 
 /** 보관 상태 */
-export type Status = "보관중" | "현장에 있음" | "현장에 없음" | "주인 찾음";
+export type Status = "보관중" | "현장에 있음" | "현장에 없음" | "주인 찾음" | "확인 중";
 
 /** 목록 한 줄 (getPtLosfundInfoAccToClAreaPd 응답 + 출처) */
 export interface FoundItem {
@@ -103,7 +103,7 @@ export interface ChatRequest {
   message: string;
   /** 앱: uri 는 휴대폰 안의 사진 위치, base64 는 서버(Lambda → Bedrock)로 보낼 사진 데이터 */
   image?: { name: string; uri: string; base64?: string };
-  location?: { lat: number; lng: number }; // "현재 위치예요" 를 누르면
+  location?: { lat: number; lng: number; address?: string }; // "현재 위치예요" 를 누르면 (address: 휴대폰이 바꿔 준 실제 주소)
   pickId?: string; // 찾기 결과 카드에서 [이거예요] 를 누른 습득물
 }
 
@@ -120,6 +120,18 @@ export interface User {
   id: string;
   name: string; // 닉네임
   loginId: string; // 아이디
+  role?: "user" | "admin"; // admin = 운영자 (마이페이지에 운영자 페이지 버튼)
+}
+
+/** 운영자 페이지: [제 물건이에요] 확인 요청 */
+export interface Claim {
+  id: string;
+  status: "대기" | "찾음" | "못찾음";
+  claimedAt: string;
+  resolvedAt: string | null;
+  claimer: { name: string; loginId: string }; // 제 물건이에요를 누른 사람
+  reporter: string | null; // 처음 제보한 사람 닉네임
+  item: FoundItem;
 }
 
 /** 회원가입 입력 */

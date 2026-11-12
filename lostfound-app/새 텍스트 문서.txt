@@ -1,0 +1,7 @@
+$env:EXPO_TOKEN="복사한_토큰"
+npx expo whoami
+npx expo start --tunnel -c
+
+https://supabase.com/dashboard/project/yghpzaukxdzmyrvdezfg
+
+https://expo.dev/accounts/tmdqja/settings/access-tokens

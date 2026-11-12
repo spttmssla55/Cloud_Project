@@ -24,6 +24,7 @@ function MyPage() {
   const notices = useApp((s) => s.notices);
   const lost = useApp((s) => s.lost);
   const myItems = useApp((s) => s.myItems);
+  const meError = useApp((s) => s.meError);
   const unread = notices.filter((n) => !n.read).length;
 
   // 화면에 들어올 때마다 서버에서 새로 가져오기 (새 알림 확인)
@@ -57,6 +58,23 @@ function MyPage() {
           <Text style={{ color: C.sub, fontWeight: "700", fontSize: F.sm }}>로그아웃</Text>
         </Pressable>
       </View>
+
+      {/* 서버에서 못 불러왔으면 이유를 보여 준다 (예전엔 조용히 빈 화면) */}
+      {!!meError && (
+        <Pressable onPress={() => refreshMe()} style={st.errBox} accessibilityRole="button">
+          <Text style={st.errTitle}>마이페이지를 불러오지 못했어요</Text>
+          <Text style={st.errText}>{meError}</Text>
+          <Text style={st.errRetry}>눌러서 다시 시도 ↻</Text>
+        </Pressable>
+      )}
+
+      {/* 운영자만: 운영자 페이지 */}
+      {user.role === "admin" && (
+        <Pressable onPress={() => router.push("/admin")} style={({ pressed }) => [st.adminCard, pressed && { opacity: 0.8 }]} accessibilityRole="button">
+          <Text style={st.adminTitle}>🛠 운영자 페이지</Text>
+          <Text style={st.adminSub}>[제 물건이에요] 요청을 확인하고 찾음 / 못찾음으로 처리해요 ›</Text>
+        </Pressable>
+      )}
 
       {/* 알림 */}
       <Section title="알림" count={unread ? `새 알림 ${unread}` : undefined}>
@@ -147,6 +165,13 @@ function Empty({ text, action, onAction }: { text: string; action?: string; onAc
 }
 
 const st = StyleSheet.create({
+  errBox: { marginTop: 14, padding: 14, borderRadius: 16, backgroundColor: "#FDECEC", borderWidth: 1, borderColor: "#F3B5B5", gap: 4 },
+  errTitle: { fontSize: F.md, fontWeight: "800", color: "#B71C1C" },
+  errText: { fontSize: F.sm, color: "#7F1D1D" },
+  errRetry: { fontSize: F.sm, fontWeight: "700", color: "#B71C1C", marginTop: 4 },
+  adminCard: { marginTop: 14, padding: 16, borderRadius: 18, backgroundColor: C.brand, gap: 4 },
+  adminTitle: { color: "#fff", fontSize: F.lg, fontWeight: "800" },
+  adminSub: { color: "#fff", opacity: 0.9, fontSize: F.sm },
   h1: { fontSize: F.xxl, fontWeight: "800", color: C.ink },
   lead: { fontSize: F.md, color: C.sub, marginTop: 8, lineHeight: 25 },
   form: { marginTop: 22, gap: 14, padding: 18, backgroundColor: C.card, borderRadius: 20, borderWidth: 1, borderColor: C.line },

@@ -28,4 +28,5 @@ export const STATUS_COLOR: Record<Status, { bg: string; fg: string }> = {
   "현장에 있음": { bg: C.reportSoft, fg: C.report },
   "현장에 없음": { bg: C.bg, fg: C.sub },
   "주인 찾음": { bg: C.bg, fg: C.sub },
+  "확인 중": { bg: C.brandSoft, fg: C.brandDark }, // 주인 확인 요청 → 운영자가 볼 때까지
 };

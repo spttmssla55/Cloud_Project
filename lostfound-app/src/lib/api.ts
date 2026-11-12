@@ -18,7 +18,7 @@
 import { MOCK_ITEMS } from "./mock-data";
 import { mockChat } from "./mock-chat";
 import { hasPhoto, localYmd } from "./format";
-import type { ChatReply, ChatRequest, FoundItem, FoundItemDetail, ListPage, ListQuery, MyData, SignupForm, Stats, User } from "./types";
+import type { ChatReply, ChatRequest, Claim, FoundItem, FoundItemDetail, ListPage, ListQuery, MyData, SignupForm, Stats, User } from "./types";
 
 const API = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 export const IS_MOCK = !API;
@@ -126,4 +126,8 @@ export const apiReadNotices = () => call<{ ok: boolean }>("/me/notices/read", { 
 /** 사용자 제보 물건: 아직 여기 있어요(here) / 현장에 없어요(gone) / 제 물건이에요(mine, 로그인 필요) */
 export const apiReportItem = (id: string, kind: "here" | "gone" | "mine") =>
   call<{ ok: boolean; message: string; status?: string }>("/items/report", { method: "POST", body: JSON.stringify({ id, kind }) });
+/** 운영자 페이지 */
+export const apiAdminClaims = () => call<{ waiting: Claim[]; done: Claim[] }>("/admin/claims");
+export const apiResolveClaim = (id: string, result: "found" | "notfound") =>
+  call<{ ok: boolean; status: string }>("/admin/claims/resolve", { method: "POST", body: JSON.stringify({ id, result }) });
 export const apiLostFound = (id: string) => call<{ ok: boolean }>("/lost/found", { method: "POST", body: JSON.stringify({ id }) });

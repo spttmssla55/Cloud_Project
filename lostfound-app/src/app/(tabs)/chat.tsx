@@ -143,8 +143,10 @@ export default function ChatScreen() {
       setBusy(true);
       try {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const address = await addressOf(loc.coords.latitude, loc.coords.longitude);
         setBusy(false);
-        return send(q.value, { location: { lat: loc.coords.latitude, lng: loc.coords.longitude } });
+        // 말풍선에도 실제 주소를 보여 준다 ("지금 위치예요 (경기도 성남시 중원구 광명로 377)")
+        return send(address ? `${q.value} (${address})` : q.value, { location: { lat: loc.coords.latitude, lng: loc.coords.longitude, address } });
       } catch {
         setBusy(false);
         return send(q.value);
@@ -246,6 +248,23 @@ export default function ChatScreen() {
   );
 }
 
+/**
+ * 좌표 → 실제 주소 (휴대폰 OS 의 주소 변환 사용, 무료)
+ *   Android 는 formattedAddress 가 오고, iOS 는 시/구/도로명을 이어 붙인다. 실패하면 "" (서버는 좌표만 씀)
+ */
+async function addressOf(lat: number, lng: number): Promise<string> {
+  try {
+    const [a] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+    if (!a) return "";
+    const formatted = a.formattedAddress?.replace(/^대한민국\s*/, "").trim();
+    if (formatted) return formatted.slice(0, 60);
+    const parts = [a.region, a.city, a.subregion, a.district, a.street, a.streetNumber].filter((p): p is string => !!p);
+    return [...new Set(parts)].join(" ").slice(0, 60);
+  } catch {
+    return "";
+  }
+}
+
 /** 등록·찾기가 몇 단계 중 어디인지 (예: 습득물 등록 2/3 · 발견한 곳) */
 const STEPS: Record<string, { title: string; steps: { key: string[]; label: string }[] }> = {
   register: {
@@ -260,7 +279,7 @@ const STEPS: Record<string, { title: string; steps: { key: string[]; label: stri
   find: {
     title: "분실물 찾기",
     steps: [
-      { key: ["ask_features"], label: "물건 설명" },
+      { key: ["ask_features", "ask_confirm"], label: "물건 설명" },
       { key: ["ask_pick", "picked"], label: "비슷한 물건 보기" },
       { key: ["ask_lost_place", "ask_review", "ask_more", "ask_save"], label: "등록하고 알림 받기" },
     ],

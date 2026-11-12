@@ -1,0 +1,19 @@
+# 다시찾기 — 하루 3번 서버 깨우기 (무료)
+#   학교 AWS 계정은 EventBridge 스케줄을 못 만들어서, GitHub 이 정해진 시각에 홈 주소(/stats)를 불러 준다.
+#   → items 함수가 '마지막 수집이 6시간 넘었으면' collector 를 깨워 경찰청 습득물을 새로 가져온다
+#   → 매일 DB 를 쓰니 Supabase 무료 플랜이 7일 뒤 잠드는 것도 막는다
+# 시간은 UTC: 0시·6시·12시 = 한국 오전 9시·오후 3시·오후 9시
+name: keepalive
+
+on:
+  schedule:
+    - cron: "5 0,6,12 * * *"
+  workflow_dispatch: {}   # Actions 탭에서 'Run workflow' 로 바로 실행도 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 홈 숫자 불러오기 (수집 깨우기)
+        run: |
+          curl -fsS --max-time 30 https://p206s6uh0g.execute-api.ap-northeast-2.amazonaws.com/stats

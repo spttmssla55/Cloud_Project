@@ -32,6 +32,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/signup" options={{ title: "회원가입" }} />
         <Stack.Screen name="auth/find-id" options={{ title: "아이디 찾기" }} />
         <Stack.Screen name="auth/find-password" options={{ title: "비밀번호 찾기" }} />
+        <Stack.Screen name="admin" options={{ title: "운영자 페이지" }} />
       </Stack>
     </>
   );

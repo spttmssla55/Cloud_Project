@@ -33,7 +33,7 @@ export default function ItemScreen() {
   async function report(kind: "here" | "gone" | "mine") {
     if (IS_MOCK) return Alert.alert("예시 모드", "서버(EXPO_PUBLIC_API_URL)를 연결하면 실제로 기록돼요.");
     if (kind === "mine" && !loggedIn) {
-      return Alert.alert("로그인이 필요해요", "로그인하면 처음 제보한 분께 알려 드릴 수 있어요.", [
+      return Alert.alert("로그인이 필요해요", "로그인하면 주인 확인을 요청할 수 있어요.", [
         { text: "취소", style: "cancel" },
         { text: "로그인하러 가기", onPress: () => router.push("/my") },
       ]);
@@ -85,7 +85,14 @@ export default function ItemScreen() {
         </View>
       ) : null}
 
-      {isUser && (
+      {isUser && (item.status === "확인 중" || item.status === "주인 찾음") && (
+        <View style={st.note}>
+          <Text style={st.noteText}>
+            {item.status === "확인 중" ? "주인이라는 분이 나타나서 운영자가 확인하고 있어요. 확인이 끝날 때까지 목록에서 잠시 숨겨져요." : "주인을 찾은 물건이에요."}
+          </Text>
+        </View>
+      )}
+      {isUser && item.status !== "확인 중" && item.status !== "주인 찾음" && (
         <View style={{ gap: 8, marginTop: 18 }}>
           <Button title="제 물건이에요" disabled={sending} onPress={() => report("mine")} />
           <View style={{ flexDirection: "row", gap: 8 }}>
