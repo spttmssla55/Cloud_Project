@@ -1,0 +1,23 @@
+# AWS Amplify Hosting 빌드 설정 — 다시찾기 웹 버전
+#   GitHub 에 push → Amplify 가 이 파일대로 빌드 → https://….amplifyapp.com 에 자동 반영
+#   이 파일은 저장소 맨 위(Cloud_Project 바로 아래)에 둔다. 앱 코드는 lostfound-app 폴더에 있다.
+version: 1
+applications:
+  - appRoot: lostfound-app
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22      # Expo SDK 58 에 맞는 Node
+            - npm ci                            # package-lock.json 그대로 설치
+        build:
+          commands:
+            # 서버 주소는 비밀이 아니라서 여기에 적어도 된다 (.env.local 은 GitHub 에 안 올라가니까)
+            - EXPO_PUBLIC_API_URL=https://p206s6uh0g.execute-api.ap-northeast-2.amazonaws.com npx expo export -p web
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*

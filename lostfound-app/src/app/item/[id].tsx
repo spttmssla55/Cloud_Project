@@ -10,6 +10,7 @@ import { useApp } from "@/lib/store";
 import { relDate, timeText } from "@/lib/format";
 import { C, F } from "@/lib/theme";
 import type { FoundItemDetail } from "@/lib/types";
+import { ask, notify } from "@/lib/dialog";
 
 export default function ItemScreen() {
   const { id, sn } = useLocalSearchParams<{ id: string; sn?: string }>();
@@ -31,20 +32,17 @@ export default function ItemScreen() {
   const isUser = item.source === "user";
   // 사용자 제보 물건의 버튼 → 서버에 기록하고 결과를 알려 준다
   async function report(kind: "here" | "gone" | "mine") {
-    if (IS_MOCK) return Alert.alert("예시 모드", "서버(EXPO_PUBLIC_API_URL)를 연결하면 실제로 기록돼요.");
+    if (IS_MOCK) return notify("예시 모드", "서버(EXPO_PUBLIC_API_URL)를 연결하면 실제로 기록돼요.");
     if (kind === "mine" && !loggedIn) {
-      return Alert.alert("로그인이 필요해요", "로그인하면 주인 확인을 요청할 수 있어요.", [
-        { text: "취소", style: "cancel" },
-        { text: "로그인하러 가기", onPress: () => router.push("/my") },
-      ]);
+      return ask("로그인이 필요해요", "로그인하면 주인 확인을 요청할 수 있어요.", "로그인하러 가기", () => router.push("/my"));
     }
     setSending(true);
     try {
       const r = await apiReportItem(item!.atcId, kind);
-      Alert.alert("알려 주셔서 고마워요", r.message);
+      notify("알려 주셔서 고마워요", r.message);
       load(); // 상태·이동 기록 새로 고침
     } catch (e) {
-      Alert.alert("보내지 못했어요", (e as Error).message);
+      notify("보내지 못했어요", (e as Error).message);
     } finally {
       setSending(false);
     }

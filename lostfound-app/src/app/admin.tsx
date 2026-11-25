@@ -7,9 +7,10 @@
  */
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, ItemCard } from "@/components/ui";
 import { apiAdminClaims, apiResolveClaim } from "@/lib/api";
+import { ask, notify } from "@/lib/dialog";
 import { timeText } from "@/lib/format";
 import { useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
@@ -39,28 +40,23 @@ export default function AdminScreen() {
 
   function resolve(c: Claim, result: "found" | "notfound") {
     const name = `${c.item.clrNm ?? ""} ${c.item.fdPrdtNm}`.trim();
-    Alert.alert(
+    ask(
       result === "found" ? "찾음으로 처리할까요?" : "못찾음으로 처리할까요?",
       result === "found"
         ? `‘${name}’을 주인 찾음으로 바꾸고 목록에서 뺄게요. (기록은 남아요)`
         : `‘${name}’을 다시 목록에 보이게 할게요.`,
-      [
-        { text: "취소", style: "cancel" },
-        {
-          text: result === "found" ? "찾음" : "못찾음",
-          onPress: async () => {
-            setBusyId(c.id);
-            try {
-              await apiResolveClaim(c.id, result);
-              await load();
-            } catch (e) {
-              Alert.alert("처리하지 못했어요", (e as Error).message);
-            } finally {
-              setBusyId("");
-            }
-          },
-        },
-      ],
+      result === "found" ? "찾음" : "못찾음",
+      async () => {
+        setBusyId(c.id);
+        try {
+          await apiResolveClaim(c.id, result);
+          await load();
+        } catch (e) {
+          notify("처리하지 못했어요", (e as Error).message);
+        } finally {
+          setBusyId("");
+        }
+      },
     );
   }
 

@@ -30,6 +30,7 @@ import { IS_MOCK, sendChat } from "@/lib/api";
 import { refreshMe } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { Analysis, BotMessage, ChatRequest, ChatState, QuickReply } from "@/lib/types";
+import { notify } from "@/lib/dialog";
 
 type Photo = NonNullable<ChatRequest["image"]>;
 type Line = { who: "me"; text: string; image?: string } | { who: "bot"; msg: BotMessage };
@@ -106,7 +107,7 @@ export default function ChatScreen() {
   function pickPhoto() {
     const take = async (camera: boolean) => {
       const perm = camera ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return Alert.alert(camera ? "카메라 권한이 필요해요" : "사진 접근 권한이 필요해요", "설정에서 권한을 켜 주세요.");
+      if (!perm.granted) return notify(camera ? "카메라 권한이 필요해요" : "사진 접근 권한이 필요해요", "설정에서 권한을 켜 주세요.");
       const opts: ImagePicker.ImagePickerOptions = { quality: 1, mediaTypes: ["images"] };
       const r = camera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       if (r.canceled) return;

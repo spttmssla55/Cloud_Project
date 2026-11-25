@@ -11,6 +11,7 @@ import { localYmd, relDate, timeText } from "@/lib/format";
 import { logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { LostItem } from "@/lib/types";
+import { ask } from "@/lib/dialog";
 
 export default function MyScreen() {
   const user = useApp((s) => s.user);
@@ -54,7 +55,7 @@ function MyPage() {
           <Text style={st.name}>{user.name}님</Text>
           <Text style={st.email}>아이디 {user.loginId}</Text>
         </View>
-        <Pressable onPress={() => Alert.alert("로그아웃할까요?", undefined, [{ text: "취소", style: "cancel" }, { text: "로그아웃", onPress: logout }])} hitSlop={8}>
+        <Pressable onPress={() => ask("로그아웃할까요?", undefined, "로그아웃", logout)} hitSlop={8}>
           <Text style={{ color: C.sub, fontWeight: "700", fontSize: F.sm }}>로그아웃</Text>
         </Pressable>
       </View>
