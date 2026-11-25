@@ -2,21 +2,60 @@
  * 마이페이지: 로그인 / 알림 / 내가 등록한 습득물 / 내가 잃어버린 물건
  */
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LoginForm } from "@/components/auth";
 import { Button, ItemCard } from "@/components/ui";
-import { IS_MOCK } from "@/lib/api";
+import { apiPushTest, IS_MOCK } from "@/lib/api";
+import { enablePush, pushEnabled } from "@/lib/push";
 import { localYmd, relDate, timeText } from "@/lib/format";
 import { logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { LostItem } from "@/lib/types";
-import { ask } from "@/lib/dialog";
+import { ask, notify } from "@/lib/dialog";
 
 export default function MyScreen() {
   const user = useApp((s) => s.user);
   // 로그인 안 했으면 로그인 폼 (아래에 회원가입 · 아이디 찾기 · 비밀번호 찾기)
   return user ? <MyPage /> : <LoginForm />;
+}
+
+/* ───── 푸시 알림 ───── */
+function PushCard() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    pushEnabled().then(setOn).catch(() => setOn(false));
+  }, []);
+  async function turnOn() {
+    setBusy(true);
+    try {
+      const err = await enablePush();
+      if (err) return notify("알림을 켜지 못했어요", err);
+      setOn(true);
+      await apiPushTest();
+      notify("알림을 켰어요", "시험 알림을 보냈어요. 잠시 뒤 알림이 오는지 확인해 보세요.");
+    } catch (e) {
+      notify("알림을 켜지 못했어요", (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <View style={st.pushCard}>
+      <Text style={st.pushTitle}>{on ? "🔔 이 기기로 알림 받는 중" : "🔕 푸시 알림 꺼짐"}</Text>
+      <Text style={st.pushSub}>
+        {on
+          ? "비슷한 물건이 들어오거나, 보관 기한이 다가오거나, 주인 확인 결과가 나오면 바로 알려 드려요."
+          : "앱을 안 열어도 비슷한 물건이 들어오면 바로 알려 드려요. 전화번호는 필요 없어요."}
+      </Text>
+      {on ? (
+        <Button title="시험 알림 보내기" kind="line" disabled={busy} onPress={() => apiPushTest().then(() => notify("보냈어요", "잠시 뒤 알림을 확인해 보세요.")).catch((e) => notify("보내지 못했어요", (e as Error).message))} />
+      ) : (
+        <Button title={busy ? "켜는 중…" : "알림 켜기"} disabled={busy || on === null} onPress={turnOn} />
+      )}
+    </View>
+  );
 }
 
 /* ───── 마이페이지 ───── */
@@ -73,9 +112,12 @@ function MyPage() {
       {user.role === "admin" && (
         <Pressable onPress={() => router.push("/admin")} style={({ pressed }) => [st.adminCard, pressed && { opacity: 0.8 }]} accessibilityRole="button">
           <Text style={st.adminTitle}>🛠 운영자 페이지</Text>
-          <Text style={st.adminSub}>[제 물건이에요] 요청을 확인하고 찾음 / 못찾음으로 처리해요 ›</Text>
+          <Text style={st.adminSub}>AI 본인 확인 기록 · 운영 통계 · 필요하면 되돌리기 ›</Text>
         </Pressable>
       )}
+
+      {/* 푸시 알림 켜기 (웹: 이 브라우저로, 전화번호 필요 없음) */}
+      {!IS_MOCK && <PushCard />}
 
       {/* 알림 */}
       <Section title="알림" count={unread ? `새 알림 ${unread}` : undefined}>
@@ -85,7 +127,7 @@ function MyPage() {
           notices.slice(0, 5).map((n) => (
             <Pressable
               key={n.id}
-              onPress={() => router.push({ pathname: "/item/[id]", params: { id: n.itemId, sn: "1" } })}
+              onPress={() => n.itemId && router.push({ pathname: "/item/[id]", params: { id: n.itemId, sn: "1" } })}
               style={[st.notice, !n.read && { borderColor: C.brand, backgroundColor: C.brandSoft }]}
             >
               <Text style={{ fontSize: 20 }}>🔔</Text>
@@ -101,6 +143,7 @@ function MyPage() {
 
       {/* 잃어버린 물건 */}
       <Section title="잃어버린 물건" count={`${lost.length}건`}>
+        <Text style={st.keywordHint}>🔔 ‘찾는 중’인 물건은 알림 구독이에요. 경찰청·사용자 제보로 같은 종류·같은 색 물건이 새로 들어오면 자동으로 알려 드려요.</Text>
         {lost.length === 0 ? (
           <Empty text="챗봇에 “잃어버렸어요”라고 물어보면 여기에 등록돼요." action="챗봇에게 물어보기" onAction={() => router.push({ pathname: "/chat", params: { start: "lost" } })} />
         ) : (
@@ -195,4 +238,8 @@ const st = StyleSheet.create({
   pill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   empty: { padding: 18, borderRadius: 16, backgroundColor: C.card, borderWidth: 1, borderColor: C.line },
   emptyText: { fontSize: F.sm, color: C.sub, lineHeight: 22, textAlign: "center" },
+  pushCard: { marginTop: 14, padding: 16, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, gap: 8 },
+  pushTitle: { fontSize: F.md, fontWeight: "800", color: C.ink },
+  pushSub: { fontSize: F.sm, color: C.sub, lineHeight: 21 },
+  keywordHint: { fontSize: F.xs, color: C.sub, lineHeight: 18, marginBottom: 8 },
 });

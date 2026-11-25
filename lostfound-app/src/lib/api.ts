@@ -18,7 +18,7 @@
 import { MOCK_ITEMS } from "./mock-data";
 import { mockChat } from "./mock-chat";
 import { hasPhoto, localYmd } from "./format";
-import type { ChatReply, ChatRequest, Claim, FoundItem, FoundItemDetail, ListPage, ListQuery, MyData, SignupForm, Stats, User } from "./types";
+import type { AdminStats, ChatReply, ChatRequest, Claim, ClaimResult, FoundItem, FoundItemDetail, Insights, ListPage, ListQuery, MapPlace, MyData, SignupForm, Stats, User } from "./types";
 
 const API = (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/$/, "");
 export const IS_MOCK = !API;
@@ -123,9 +123,26 @@ export const apiResetPassword = (b: { loginId: string; answer: string; password:
   call<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: JSON.stringify(b) });
 export const apiMe = () => call<MyData>("/me");
 export const apiReadNotices = () => call<{ ok: boolean }>("/me/notices/read", { method: "POST", body: "{}" });
-/** 사용자 제보 물건: 아직 여기 있어요(here) / 현장에 없어요(gone) / 제 물건이에요(mine, 로그인 필요) */
-export const apiReportItem = (id: string, kind: "here" | "gone" | "mine") =>
-  call<{ ok: boolean; message: string; status?: string }>("/items/report", { method: "POST", body: JSON.stringify({ id, kind }) });
+/** 사용자 제보 물건: 아직 여기 있어요(here) / 현장에 없어요(gone) / 다른 곳으로 옮겼어요(moved: place + 좌표) */
+export const apiReportItem = (id: string, kind: "here" | "gone" | "mine" | "moved", extra?: { place?: string; lat?: number; lng?: number }) =>
+  call<{ ok: boolean; message: string; status?: string }>("/items/report", { method: "POST", body: JSON.stringify({ id, kind, ...extra }) });
+/** [제 물건이에요] → AI 본인 확인. 1차 {id, answer}, AI 가 질문하면 2차 {ticket, answer2} */
+export const apiClaim = (b: { id: string; answer: string } | { ticket: string; answer2: string }) =>
+  call<ClaimResult>("/items/claim", { method: "POST", body: JSON.stringify(b) });
+/** 지도: 보이는 범위의 습득물 (같은 자리는 하나로 묶음) */
+export const apiMap = (b: { south: number; west: number; north: number; east: number; days?: number; category?: string; keyword?: string }) =>
+  call<{ places: MapPlace[] }>(
+    "/items/map?" + Object.entries(b).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&"),
+  );
+export const API_BASE = API;
+/** 통계 (누구나) */
+export const apiInsights = (days = 30) => call<Insights>(`/stats/insights?days=${days}`);
+/** 웹 푸시: 이 브라우저 구독 저장 / 시험 알림 */
+export const apiPushSubscribe = (subscription: unknown) =>
+  call<{ ok: boolean }>("/me/push-subscription", { method: "POST", body: JSON.stringify({ subscription }) });
+export const apiPushTest = () => call<{ sent: number }>("/me/push-test", { method: "POST", body: "{}" });
+export const apiAdminStats = () => call<AdminStats>("/admin/stats");
+export const apiReopenClaim = (id: string) => call<{ ok: boolean }>("/admin/claims/reopen", { method: "POST", body: JSON.stringify({ id }) });
 /** 운영자 페이지 */
 export const apiAdminClaims = () => call<{ waiting: Claim[]; done: Claim[] }>("/admin/claims");
 export const apiResolveClaim = (id: string, result: "found" | "notfound") =>

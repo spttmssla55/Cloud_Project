@@ -41,6 +41,62 @@ export interface FoundItemDetail extends FoundItem {
   tel?: string; // 기관 전화번호
   uniq?: string; // 특이사항
   sightings?: Sighting[]; // 사용자 제보: 목격·이동 기록 (오래된 순)
+  path?: PathPoint[]; // 지도: 처음 발견한 곳 → 옮긴 곳 → 지금 있는 곳 (좌표를 아는 것만)
+}
+
+/** 지도 위의 점 하나 */
+export interface PathPoint {
+  lat: number;
+  lng: number;
+  label: string;
+  kind: "found" | "moved" | "now";
+  at?: string | null;
+}
+
+/** 지도 탭: 같은 자리(경찰서 등)의 물건 묶음 */
+export interface MapPlace {
+  lat: number;
+  lng: number;
+  place: string;
+  count: number;
+  latest: string;
+  user: boolean;
+  items: { atcId: string; name: string; color?: string; category: string; date: string; source: Source; status: Status }[];
+}
+
+/** 통계 화면 (GET /stats/insights) */
+export interface Insights {
+  days: number;
+  total: number;
+  withPhoto: number;
+  categories: { label: string; count: number }[];
+  names: { label: string; count: number }[];
+  colors: { label: string; count: number }[];
+  places: { label: string; count: number }[];
+  weekdays: { label: string; count: number }[];
+  daily: { label: string; count: number }[];
+  returned: number;
+  lostRegistered: number;
+  matched: number;
+}
+
+/** 운영자 통계 (GET /admin/stats) */
+export interface AdminStats {
+  totals: Record<string, number>;
+  sync: { source: string; lastDate: string | null; lastRunAt: string | null; lastCount: number | null; error: string | null }[];
+  daily: { day: string; lost: number; found: number; matches: number }[];
+}
+
+/** [제 물건이에요] → AI 본인 확인 결과 */
+export interface ClaimResult {
+  result: "approved" | "rejected" | "question" | "pending";
+  message: string;
+  question?: string;
+  ticket?: string;
+  reason?: string;
+  place?: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 /** 사용자 제보 한 건 (같은 물건이면 한 분실물 아래에 쌓임) */
@@ -49,6 +105,7 @@ export interface Sighting {
   foundPlace: string;
   currentPlace: string;
   note: string; // 제보자가 적은 원문
+  kind?: string; // found(처음) · moved(옮김) · here · gone
 }
 
 export interface ListQuery {
@@ -132,6 +189,7 @@ export interface Claim {
   claimer: { name: string; loginId: string }; // 제 물건이에요를 누른 사람
   reporter: string | null; // 처음 제보한 사람 닉네임
   item: FoundItem;
+  ai?: { by: "ai" | "admin"; score: number | null; reason: string; answer: string; question: string; answer2: string };
 }
 
 /** 회원가입 입력 */

@@ -31,6 +31,12 @@ import { refreshMe } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 import type { Analysis, BotMessage, ChatRequest, ChatState, QuickReply } from "@/lib/types";
 import { notify } from "@/lib/dialog";
+import { load as loadStored, save as saveStored } from "@/lib/storage";
+
+/** 대화 저장: 앱을 껐다 켜도(웹은 새로 고침해도) 하던 등록·찾기를 이어서 한다. 하루 지나면 새로 시작 */
+const SAVE_KEY = "chat:v1";
+const KEEP_MS = 24 * 3600 * 1000;
+type Saved = { at: number; lines: Line[]; state: ChatState; lastMode?: ChatState["mode"]; quick: QuickReply[] };
 
 type Photo = NonNullable<ChatRequest["image"]>;
 type Line = { who: "me"; text: string; image?: string } | { who: "bot"; msg: BotMessage };
@@ -59,6 +65,28 @@ export default function ChatScreen() {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const inputRef = useRef<TextInputInstance>(null);
+  const [restored, setRestored] = useState(false);
+
+  // 저장해 둔 대화 불러오기 (목록 탭의 버튼으로 새로 시작할 때는 건너뜀)
+  useEffect(() => {
+    loadStored<Saved>(SAVE_KEY).then((saved) => {
+      if (saved && Date.now() - saved.at < KEEP_MS && saved.lines?.length > 1 && start !== "found" && start !== "lost") {
+        setLines(saved.lines);
+        setState(saved.state ?? {});
+        setLastMode(saved.lastMode);
+        setQuick(saved.quick ?? []);
+      }
+      setRestored(true);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 대화가 바뀔 때마다 저장 (사진은 휴대폰 안 임시 주소라 '📷 사진'으로만 남긴다)
+  useEffect(() => {
+    if (!restored || busy) return;
+    const slim = lines.slice(-60).map((l) => (l.who === "me" && l.image ? { who: "me" as const, text: l.text || "📷 사진" } : l));
+    saveStored(SAVE_KEY, lines.length > 1 ? ({ at: Date.now(), lines: slim, state, lastMode, quick } satisfies Saved) : null);
+  }, [restored, busy, lines, state, lastMode, quick]);
 
   // 목록 탭의 "주웠어요 / 잃어버렸어요" 버튼으로 들어오면 처음부터 바로 시작
   useEffect(() => {
@@ -169,6 +197,11 @@ export default function ChatScreen() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={kbOffset}>
       {IS_MOCK && <Text style={st.mock}>예시 응답이에요 (AI 연결 전)</Text>}
       <StepBar state={state} lastMode={lastMode} busy={busy} onCancel={() => { setPhoto(null); send("취소"); }} />
+      {lines.length > 1 && !busy && (!state.mode || state.step === "done") && (
+        <Pressable onPress={reset} style={st.newChat} accessibilityRole="button">
+          <Text style={st.newChatText}>＋ 새 대화</Text>
+        </Pressable>
+      )}
 
       <ScrollView
         ref={scrollRef}
@@ -275,6 +308,7 @@ const STEPS: Record<string, { title: string; steps: { key: string[]; label: stri
       { key: ["ask_confirm"], label: "물건 확인" },
       { key: ["ask_found_place"], label: "발견한 곳" },
       { key: ["ask_current_place", "ask_same"], label: "지금 위치" },
+      { key: ["ask_secret"], label: "주인 확인 정보" },
     ],
   },
   find: {
@@ -502,4 +536,6 @@ const st = StyleSheet.create({
   camBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: 12 },
   input: { flex: 1, minHeight: 48, maxHeight: 120, fontSize: F.md, color: C.ink, paddingHorizontal: 6, paddingTop: 13, paddingBottom: 13 },
   sendBtn: { height: 48, paddingHorizontal: 16, borderRadius: 14, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
+  newChat: { alignSelf: "flex-end", marginTop: 8, marginRight: 16, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: C.line, backgroundColor: C.card },
+  newChatText: { fontSize: F.sm, fontWeight: "700", color: C.ink2 },
 });

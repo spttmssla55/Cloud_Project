@@ -1,5 +1,5 @@
 /**
- * 아래 탭 네 개: 홈 / 습득물 / 챗봇 / 마이페이지
+ * 아래 탭 다섯 개: 홈 / 습득물 / 지도 / 챗봇 / 마이페이지
  */
 import { Tabs } from "expo-router/js-tabs";
 import { Text } from "react-native";
@@ -28,6 +28,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: SITE_NAME, tabBarLabel: "홈", tabBarIcon: icon("🏠") }} />
       <Tabs.Screen name="items" options={{ title: "습득물", tabBarLabel: "습득물", tabBarIcon: icon("🗂️") }} />
+      <Tabs.Screen name="map" options={{ title: "지도", tabBarLabel: "지도", tabBarIcon: icon("🗺️") }} />
       <Tabs.Screen name="chat" options={{ title: "챗봇으로 등록·찾기", tabBarLabel: "챗봇", tabBarIcon: icon("💬") }} />
       <Tabs.Screen
         name="my"

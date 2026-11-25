@@ -46,3 +46,32 @@ export function hasPhoto(url?: string): url is string {
 }
 
 export type { Status };
+
+/**
+ * 보관 기한: 경찰서·기관에 맡겨진 습득물은 공고 후 6개월 안에 주인이 찾아가야 한다 (민법 253조).
+ * 공고일은 API 에 없어서 습득일 + 6개월로 '대략' 계산한다 (실제 기한은 며칠 더 늦을 수 있음 → 안전한 쪽).
+ * 사용자 제보 물건은 법적 보관이 아니라서 기한 없음.
+ */
+export function deadlineOf(item: { source: Source; fdYmd: string }): { date: string; left: number } | null {
+  if (item.source === "user" || !item.fdYmd) return null;
+  const [y, m, d] = item.fdYmd.slice(0, 10).split("-").map(Number);
+  const end = new Date(y, m - 1 + 6, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return { date: localYmd(end), left: Math.round((end.getTime() - today.getTime()) / 86400000) };
+}
+
+/** D-23 / D-DAY / 기한 지남 */
+export function ddayText(left: number): string {
+  if (left < 0) return "기한 지남";
+  if (left === 0) return "D-DAY";
+  return `D-${left}`;
+}
+
+/** 경찰서·유실물센터 운영 시간 (API 에 없어서 일반 기준) */
+export const OFFICE_HOURS = "평일 09:00~18:00 (점심 12:00~13:00 · 주말·공휴일 휴무, 지구대는 24시간)";
+
+/** 카카오맵 길찾기 (앱이 있으면 앱, 없으면 웹) — 무료, 키 필요 없음 */
+export function directionsUrl(name: string, lat: number, lng: number): string {
+  return `https://map.kakao.com/link/to/${encodeURIComponent(name.replace(/,/g, " "))},${lat},${lng}`;
+}

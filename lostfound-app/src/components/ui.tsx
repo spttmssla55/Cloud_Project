@@ -3,7 +3,7 @@
  */
 import { router } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View, type PressableProps, type ImageStyle, type StyleProp, type ViewStyle } from "react-native";
-import { SOURCE_LABEL, categoryEmoji, hasPhoto, relDate } from "@/lib/format";
+import { SOURCE_LABEL, categoryEmoji, ddayText, deadlineOf, hasPhoto, relDate } from "@/lib/format";
 import { C, F, STATUS_COLOR } from "@/lib/theme";
 import type { FoundItem } from "@/lib/types";
 
@@ -44,6 +44,7 @@ export function StatusBadge({ status }: { status: FoundItem["status"] }) {
 /** 목록 카드: 물건 이름 → 어디 있는지 → 언제, 순서로 크게 */
 export function ItemCard({ item }: { item: FoundItem }) {
   const where = item.source === "user" ? item.currentPlace ?? item.depPlace : item.depPlace;
+  const dl = item.status === "보관중" ? deadlineOf(item) : null; // 보관 기한 30일 안이면 D-day 표시
   return (
     <Pressable
       onPress={() => router.push({ pathname: "/item/[id]", params: { id: item.atcId, sn: item.fdSn } })}
@@ -55,6 +56,7 @@ export function ItemCard({ item }: { item: FoundItem }) {
           <View style={s.badges}>
             <SourceBadge source={item.source} />
             <StatusBadge status={item.status} />
+            {dl && dl.left <= 30 && <Badge text={`보관 ${ddayText(dl.left)}`} bg="#FFEBEE" fg="#C62828" />}
           </View>
           <Text style={s.title} numberOfLines={1}>{item.fdPrdtNm}</Text>
           <Text style={s.sub} numberOfLines={1}>

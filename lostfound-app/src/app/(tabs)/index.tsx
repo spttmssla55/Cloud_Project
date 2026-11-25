@@ -51,6 +51,20 @@ export default function HomeScreen() {
       </View>
       {IS_MOCK && <Text style={st.mock}>지금은 예시 데이터 기준 숫자예요.</Text>}
 
+      {/* 지도 · 통계 바로가기 */}
+      <View style={st.linkRow}>
+        <Pressable onPress={() => router.push("/map")} style={({ pressed }) => [st.linkBox, pressed && { opacity: 0.7 }]} accessibilityRole="button">
+          <Text style={st.linkEmoji}>🗺️</Text>
+          <Text style={st.linkTitle}>지도로 보기</Text>
+          <Text style={st.linkSub}>내 주변 습득물</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push("/stats")} style={({ pressed }) => [st.linkBox, pressed && { opacity: 0.7 }]} accessibilityRole="button">
+          <Text style={st.linkEmoji}>📊</Text>
+          <Text style={st.linkTitle}>분실 통계</Text>
+          <Text style={st.linkSub}>많이 잃어버리는 물건·장소</Text>
+        </Pressable>
+      </View>
+
       {/* 3. 최근 등록된 습득물 (사진 있는 것 10개, 옆으로 넘기기) */}
       <Recent items={recent} />
     </ScrollView>
@@ -168,4 +182,9 @@ const st = StyleSheet.create({
   recentFoot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.line },
   recentSrc: { fontSize: F.xs, color: C.sub },
   recentLink: { fontSize: F.sm, fontWeight: "700", color: C.ink },
+  linkRow: { flexDirection: "row", gap: 12, marginTop: 12 },
+  linkBox: { flex: 1, padding: 16, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, gap: 2 },
+  linkEmoji: { fontSize: 26 },
+  linkTitle: { fontSize: F.md, fontWeight: "800", color: C.ink, marginTop: 4 },
+  linkSub: { fontSize: F.xs, color: C.sub },
 });

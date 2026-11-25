@@ -4,6 +4,7 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { setupPwa } from "@/lib/push";
 import { restoreSession } from "@/lib/store";
 import { C } from "@/lib/theme";
 
@@ -11,6 +12,7 @@ export default function RootLayout() {
   // 앱을 켜면 저장해 둔 로그인부터 불러온다
   useEffect(() => {
     restoreSession();
+    setupPwa(); // 웹: 홈 화면에 추가 + 푸시 알림 준비 (휴대폰 앱은 아무것도 안 함)
   }, []);
 
   return (
@@ -33,6 +35,7 @@ export default function RootLayout() {
         <Stack.Screen name="auth/find-id" options={{ title: "아이디 찾기" }} />
         <Stack.Screen name="auth/find-password" options={{ title: "비밀번호 찾기" }} />
         <Stack.Screen name="admin" options={{ title: "운영자 페이지" }} />
+        <Stack.Screen name="stats" options={{ title: "분실 통계" }} />
       </Stack>
     </>
   );

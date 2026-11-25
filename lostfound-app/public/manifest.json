@@ -1,0 +1,12 @@
+{
+  "name": "다시찾기",
+  "short_name": "다시찾기",
+  "description": "잃어버린 물건, 사진 한 장과 한마디로",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F6F7F9",
+  "theme_color": "#2457D6",
+  "lang": "ko",
+  "icons": [{ "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }]
+}
