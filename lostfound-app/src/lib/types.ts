@@ -42,6 +42,7 @@ export interface FoundItemDetail extends FoundItem {
   uniq?: string; // 특이사항
   sightings?: Sighting[]; // 사용자 제보: 목격·이동 기록 (오래된 순)
   path?: PathPoint[]; // 지도: 처음 발견한 곳 → 옮긴 곳 → 지금 있는 곳 (좌표를 아는 것만)
+  verify?: "contents" | "phone" | "onsite"; // 주인 확인 방법: 내용물 / 케이스·잠금화면 / 현장에서 휴대폰 연결
 }
 
 /** 지도 위의 점 하나 */
@@ -89,7 +90,7 @@ export interface AdminStats {
 
 /** [제 물건이에요] → AI 본인 확인 결과 */
 export interface ClaimResult {
-  result: "approved" | "rejected" | "question" | "pending";
+  result: "approved" | "rejected" | "question" | "pending" | "onsite";
   message: string;
   question?: string;
   ticket?: string;
@@ -178,6 +179,8 @@ export interface User {
   name: string; // 닉네임
   loginId: string; // 아이디
   role?: "user" | "admin"; // admin = 운영자 (마이페이지에 운영자 페이지 버튼)
+  email?: string; // 인증한 이메일 (예전 계정은 비어 있을 수 있음)
+  mailNotify?: boolean; // 알림 메일 받기
 }
 
 /** 운영자 페이지: [제 물건이에요] 확인 요청 */
@@ -189,7 +192,7 @@ export interface Claim {
   claimer: { name: string; loginId: string }; // 제 물건이에요를 누른 사람
   reporter: string | null; // 처음 제보한 사람 닉네임
   item: FoundItem;
-  ai?: { by: "ai" | "admin"; score: number | null; reason: string; answer: string; question: string; answer2: string };
+  ai?: { by: "ai" | "admin" | "onsite"; score: number | null; reason: string; answer: string; question: string; answer2: string };
 }
 
 /** 회원가입 입력 */
@@ -198,8 +201,9 @@ export interface SignupForm {
   loginId: string;
   password: string;
   password2: string;
-  question: string; // 비밀번호 찾기 질문
-  answer: string;
+  emailToken?: string; // 이메일 인증을 마치면 받는 확인값 (실제 있는 메일로만 가입)
+  question?: string; // (예전 방식) 비밀번호 찾기 질문
+  answer?: string;
 }
 
 /** 챗봇에서 "잃어버렸어요"로 물어보면 저장되는 것 (DB: REQ#<사용자id>) */

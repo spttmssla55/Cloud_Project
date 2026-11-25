@@ -4,9 +4,9 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { LoginForm } from "@/components/auth";
+import { EmailVerify, LoginForm } from "@/components/auth";
 import { Button, ItemCard } from "@/components/ui";
-import { apiPushTest, IS_MOCK } from "@/lib/api";
+import { apiLinkEmail, apiMailNotify, apiPushTest, IS_MOCK } from "@/lib/api";
 import { enablePush, pushEnabled } from "@/lib/push";
 import { localYmd, relDate, timeText } from "@/lib/format";
 import { logout, markLostFound, readAllNotices, refreshMe, useApp } from "@/lib/store";
@@ -53,6 +53,56 @@ function PushCard() {
         <Button title="시험 알림 보내기" kind="line" disabled={busy} onPress={() => apiPushTest().then(() => notify("보냈어요", "잠시 뒤 알림을 확인해 보세요.")).catch((e) => notify("보내지 못했어요", (e as Error).message))} />
       ) : (
         <Button title={busy ? "켜는 중…" : "알림 켜기"} disabled={busy || on === null} onPress={turnOn} />
+      )}
+    </View>
+  );
+}
+
+/* ───── 이메일 (알림 메일 · 예전 계정은 메일 등록) ───── */
+function EmailCard() {
+  const user = useApp((s) => s.user)!;
+  const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  async function toggle() {
+    setBusy(true);
+    try {
+      await apiMailNotify(!user.mailNotify);
+      await refreshMe();
+    } catch (e) {
+      notify("바꾸지 못했어요", (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (user.email) {
+    return (
+      <View style={st.pushCard}>
+        <Text style={st.pushTitle}>{user.mailNotify ? "📧 알림 메일 받는 중" : "📭 알림 메일 꺼짐"}</Text>
+        <Text style={st.pushSub}>{user.email} · 비슷한 물건, 보관 기한, 주인 확인 결과를 메일로도 알려 드려요.</Text>
+        <Button title={user.mailNotify ? "알림 메일 끄기" : "알림 메일 켜기"} kind="line" disabled={busy} onPress={toggle} />
+      </View>
+    );
+  }
+  return (
+    <View style={st.pushCard}>
+      <Text style={st.pushTitle}>📧 이메일을 등록해 주세요</Text>
+      <Text style={st.pushSub}>이메일 없이 가입한 계정이에요. 등록하면 알림을 메일로 받고, 아이디·비밀번호도 메일로 찾을 수 있어요.</Text>
+      {adding ? (
+        <EmailVerify
+          purpose="link"
+          onVerified={async (r) => {
+            if (!r) return;
+            try {
+              await apiLinkEmail(r.emailToken);
+              await refreshMe();
+              notify("이메일을 등록했어요", r.email);
+            } catch (e) {
+              notify("등록하지 못했어요", (e as Error).message);
+            }
+          }}
+        />
+      ) : (
+        <Button title="이메일 등록하기" onPress={() => setAdding(true)} />
       )}
     </View>
   );
@@ -118,6 +168,7 @@ function MyPage() {
 
       {/* 푸시 알림 켜기 (웹: 이 브라우저로, 전화번호 필요 없음) */}
       {!IS_MOCK && <PushCard />}
+      {!IS_MOCK && <EmailCard />}
 
       {/* 알림 */}
       <Section title="알림" count={unread ? `새 알림 ${unread}` : undefined}>

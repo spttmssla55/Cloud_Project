@@ -85,12 +85,43 @@ export default function ItemScreen() {
     report("moved", { place, ...coords });
   }
 
-  function startClaim() {
+  const vtype = item.verify ?? "contents";
+  const HINT = {
+    contents: { what: "이 물건만의 특징", ex: "예: 안에 신구대 학생증이 있어요 / 카드 3장 / 안쪽 주머니에 영수증" },
+    phone: { what: "휴대폰 케이스·잠금화면 특징", ex: "예: 투명 케이스 안에 사진 / 잠금화면이 강아지 사진 / 뒷면에 그립톡" },
+    onsite: { what: "", ex: "" },
+  }[vtype];
+
+  async function startClaim() {
     if (IS_MOCK) return notify("예시 모드", "서버를 연결하면 AI가 확인해요.");
     if (!loggedIn) return ask("로그인이 필요해요", "로그인하면 '제 물건이에요'를 누를 수 있어요.", "로그인하러 가기", () => router.push("/my"));
     setClaim(null);
     setAnswer("");
-    setPanel(panel === "claim" ? "" : "claim");
+    if (panel === "claim") return setPanel("");
+    setPanel("claim");
+    if (vtype === "onsite") {
+      // 이어폰류: 글로 확인하지 않고 현장 확인 안내를 받는다
+      try {
+        setClaim(await apiClaim({ id: item!.atcId }));
+      } catch (e) {
+        notify("확인하지 못했어요", (e as Error).message);
+      }
+    }
+  }
+
+  /** 이어폰류: 현장에서 휴대폰과 연결해 보고 내 것이 맞았을 때 */
+  function pickedUp() {
+    ask("찾으셨나요?", "내 휴대폰에 연결된 걸 확인했다면 '주인 찾음'으로 바꿀게요.", "네, 찾았어요", async () => {
+      setSending(true);
+      try {
+        setClaim(await apiClaim({ id: item!.atcId, picked: true }));
+        load();
+      } catch (e) {
+        notify("처리하지 못했어요", (e as Error).message);
+      } finally {
+        setSending(false);
+      }
+    });
   }
 
   /** AI 본인 확인: 1차는 특징 설명, AI 가 질문하면 2차로 그 답 */
@@ -179,7 +210,7 @@ export default function ItemScreen() {
       ) : null}
 
       {/* AI 확인 결과 */}
-      {claim && claim.result !== "question" && (
+      {claim && claim.result !== "question" && claim.result !== "onsite" && (
         <View style={[st.result, claim.result === "approved" ? st.resultOk : claim.result === "rejected" ? st.resultNo : null]}>
           <Text style={st.resultTitle}>
             {claim.result === "approved" ? "✅ 주인으로 확인됐어요" : claim.result === "rejected" ? "확인하지 못했어요" : "운영자가 확인할게요"}
@@ -201,7 +232,22 @@ export default function ItemScreen() {
       {isUser && item.status !== "확인 중" && item.status !== "주인 찾음" && (
         <View style={{ gap: 8, marginTop: 18 }}>
           <Button title="🙋 제 물건이에요" disabled={sending} onPress={startClaim} />
-          {panel === "claim" && (
+          {panel === "claim" && vtype === "onsite" && (
+            <View style={st.panel}>
+              <Text style={st.panelTitle}>🎧 현장에서 확인해요</Text>
+              {claim?.result === "onsite" ? (
+                <>
+                  <Text style={st.noteText}>{claim.message}</Text>
+                  <Text style={st.example}>안드로이드는 설정 → 블루투스에서 내 이어폰 이름이 보이면 연결해 보세요.</Text>
+                  <Button title="🧭 물건 있는 곳으로 길찾기" onPress={() => Linking.openURL(claim.lat != null && claim.lng != null ? directionsUrl(claim.place ?? placeName, claim.lat, claim.lng!) : goUrl)} />
+                  <Button title="✅ 연결 확인하고 찾았어요" kind="line" disabled={sending} onPress={pickedUp} />
+                </>
+              ) : (
+                <ActivityIndicator color={C.brand} />
+              )}
+            </View>
+          )}
+          {panel === "claim" && vtype !== "onsite" && (
             <View style={st.panel}>
               {claim?.result === "question" ? (
                 <>
@@ -212,16 +258,16 @@ export default function ItemScreen() {
                 <>
                   <Text style={st.panelTitle}>🤖 AI 본인 확인</Text>
                   <Text style={st.noteText}>
-                    목록에 안 나온 <Text style={{ fontWeight: "800" }}>이 물건만의 특징</Text>을 적어 주세요. 주운 분이 남긴 확인 정보, 내가 먼저 등록한 잃어버린 물건과 비교해서 AI가 바로 판단해요.
+                    목록에 안 나온 <Text style={{ fontWeight: "800" }}>{HINT.what}</Text>을 적어 주세요. 주운 분이 남긴 확인 정보, 내가 먼저 등록한 잃어버린 물건과 비교해서 AI가 바로 판단해요.
                   </Text>
-                  <Text style={st.example}>예: 안에 신구대 학생증이 있어요 / 뒷면 오른쪽 아래에 곰돌이 스티커 / 지퍼에 파란 키링</Text>
+                  <Text style={st.example}>{HINT.ex}</Text>
                 </>
               )}
               <TextInput
                 value={answer}
                 onChangeText={setAnswer}
                 multiline
-                placeholder={claim?.result === "question" ? "답을 적어 주세요" : "이 물건만의 특징"}
+                placeholder={claim?.result === "question" ? "답을 적어 주세요" : HINT.what}
                 placeholderTextColor={C.faint}
                 style={st.input}
                 maxLength={300}

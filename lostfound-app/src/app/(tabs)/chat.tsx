@@ -305,7 +305,7 @@ const STEPS: Record<string, { title: string; steps: { key: string[]; label: stri
     title: "습득물 등록",
     steps: [
       { key: ["ask_photo"], label: "사진 보내기" },
-      { key: ["ask_confirm"], label: "물건 확인" },
+      { key: ["ask_confirm", "ask_retake"], label: "물건 확인" },
       { key: ["ask_found_place"], label: "발견한 곳" },
       { key: ["ask_current_place", "ask_same"], label: "지금 위치" },
       { key: ["ask_secret"], label: "주인 확인 정보" },
@@ -314,7 +314,7 @@ const STEPS: Record<string, { title: string; steps: { key: string[]; label: stri
   find: {
     title: "분실물 찾기",
     steps: [
-      { key: ["ask_features", "ask_confirm"], label: "물건 설명" },
+      { key: ["ask_features", "ask_confirm", "ask_retake"], label: "물건 설명" },
       { key: ["ask_pick", "picked"], label: "비슷한 물건 보기" },
       { key: ["ask_lost_place", "ask_review", "ask_more", "ask_save"], label: "등록하고 알림 받기" },
     ],

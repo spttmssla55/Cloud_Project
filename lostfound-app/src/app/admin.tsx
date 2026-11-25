@@ -133,7 +133,7 @@ export default function AdminScreen() {
             <View key={c.id} style={st.doneCard}>
               <View style={st.doneRow}>
                 <Text style={[st.doneBadge, c.status === "찾음" ? { color: C.ok } : { color: C.sub }]}>{c.status === "찾음" ? "주인 맞음" : "아님"}</Text>
-                <Text style={st.by}>{c.ai?.by === "ai" ? `🤖 AI${c.ai.score != null ? ` ${Math.round(c.ai.score * 100)}점` : ""}` : "👤 운영자"}</Text>
+                <Text style={st.by}>{c.ai?.by === "ai" ? `🤖 AI${c.ai.score != null ? ` ${Math.round(c.ai.score * 100)}점` : ""}` : c.ai?.by === "onsite" ? "📍 현장 확인" : "👤 운영자"}</Text>
                 <Text style={st.doneText} numberOfLines={1}>
                   {`${c.item.clrNm ?? ""} ${c.item.fdPrdtNm}`.trim()} · {c.claimer.name}
                 </Text>
@@ -142,7 +142,7 @@ export default function AdminScreen() {
               {!!c.ai?.answer && <Text style={st.aiLine}>💬 주인이 적은 특징: “{c.ai.answer}”</Text>}
               {!!c.ai?.question && <Text style={st.aiLine}>❓ AI 질문: {c.ai.question} → “{c.ai.answer2}”</Text>}
               {!!c.ai?.reason && <Text style={st.aiLine}>🧠 판단 이유: {c.ai.reason}</Text>}
-              {c.status === "찾음" && c.ai?.by === "ai" && (
+              {c.status === "찾음" && (c.ai?.by === "ai" || c.ai?.by === "onsite") && (
                 <Button title="↩️ 되돌리기 (다시 목록에)" kind="line" disabled={busyId === c.id} onPress={() => reopen(c)} />
               )}
             </View>
@@ -156,7 +156,7 @@ export default function AdminScreen() {
 function StatsBlock({ s }: { s: AdminStats }) {
   const t = s.totals;
   const boxes: [string, number][] = [
-    ["AI 승인", t.ai_ok], ["AI 거절", t.ai_no], ["운영자 처리", t.admin_done],
+    ["AI 승인", t.ai_ok], ["AI 거절", t.ai_no], ["현장 확인", t.onsite_done], ["운영자 처리", t.admin_done],
     ["찾는 중 분실물", t.lost_active], ["찾음 처리", t.lost_found], ["7일 매칭", t.matches_7d],
     ["7일 알림", t.notices_7d], ["푸시 구독", t.push_subs], ["가입자", t.users],
     ["보관 중 습득물", t.live_items], ["지도에 표시", t.on_map], ["사진 임베딩", t.embedded],

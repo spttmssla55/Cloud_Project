@@ -1,20 +1,19 @@
 /**
- * 회원가입: 닉네임 · 아이디 · 비밀번호 · 비밀번호 확인 + 비밀번호 찾기 질문/답
+ * 회원가입: 닉네임 · 아이디 · 비밀번호 · 비밀번호 확인 + 이메일 인증
  *   닉네임·아이디는 [중복 확인]을 눌러야 가입 버튼이 켜진다 (글자를 바꾸면 다시 확인)
- *   찾기 질문/답: 이메일·휴대폰 인증 대신 아이디·비밀번호를 찾을 때 본인 확인용
+ *   이메일: 실제 메일함으로 인증번호 6자리 (AWS SES) → 아이디·비밀번호 찾기, 알림 메일에 씀
  */
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Field, LinkRow, PasswordField, SideButton, st } from "@/components/auth";
+import { useState } from "react";
+import { ScrollView, Text, View } from "react-native";
+import { EmailVerify, Field, LinkRow, PasswordField, SideButton, st } from "@/components/auth";
 import { Button } from "@/components/ui";
-import { apiCheck, apiQuestions, IS_MOCK } from "@/lib/api";
+import { apiCheck, IS_MOCK } from "@/lib/api";
 import { signup } from "@/lib/store";
-import { C, F } from "@/lib/theme";
+import { C } from "@/lib/theme";
 
 const ID_RE = /^[a-z0-9_]{4,20}$/;
 const NICK_RE = /^[가-힣A-Za-z0-9_]{2,10}$/;
-const MOCK_QUESTIONS = ["처음 다닌 초등학교 이름은?", "어릴 때 가장 친한 친구 이름은?", "가장 좋아하는 음식은?", "처음 키운 반려동물 이름은?", "어머니의 고향은?"];
 
 type Check = { state: "none" | "checking" | "ok" | "taken" | "error"; msg: string };
 
@@ -23,17 +22,11 @@ export default function SignupScreen() {
   const [loginId, setLoginId] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
-  const [questions, setQuestions] = useState<string[]>(MOCK_QUESTIONS);
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [emailToken, setEmailToken] = useState("");
   const [nickCheck, setNickCheck] = useState<Check>({ state: "none", msg: "" });
   const [idCheck, setIdCheck] = useState<Check>({ state: "none", msg: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!IS_MOCK) apiQuestions().then((r) => setQuestions(r.questions)).catch(() => {});
-  }, []);
 
   // 규칙 검사 (입력하는 대로 바로 안내)
   const nickRule = !nickname ? "" : NICK_RE.test(nickname.trim()) ? "" : "한글·영어·숫자로 2~10자 (띄어쓰기 안 돼요)";
@@ -54,14 +47,14 @@ export default function SignupScreen() {
   }
 
   const ready =
-    nickCheck.state === "ok" && idCheck.state === "ok" && !!pw && !pwRule && pw2 === pw && !!question && answer.trim().length > 0 && !busy;
+    nickCheck.state === "ok" && idCheck.state === "ok" && !!pw && !pwRule && pw2 === pw && (!!emailToken || IS_MOCK) && !busy;
 
   async function submit() {
     if (!ready) return;
     setBusy(true);
     setError("");
     try {
-      await signup({ nickname, loginId, password: pw, password2: pw2, question, answer });
+      await signup({ nickname, loginId, password: pw, password2: pw2, emailToken });
       router.dismissTo("/my");
     } catch (e) {
       setError((e as Error).message);
@@ -117,37 +110,14 @@ export default function SignupScreen() {
           tone={pw2Rule ? "error" : "ok"}
         />
 
-        {/* 찾기 질문 */}
-        <View style={{ gap: 8 }}>
-          <Text style={st.label}>비밀번호 찾기 질문</Text>
-          <Text style={st.note}>아이디·비밀번호를 잊었을 때 이 답으로 본인 확인을 해요.</Text>
-          {questions.map((q) => (
-            <Pressable
-              key={q}
-              onPress={() => setQuestion(q)}
-              style={[qs.option, question === q && qs.optionOn]}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: question === q }}
-            >
-              <Text style={[qs.radio, question === q && { color: C.brand }]}>{question === q ? "◉" : "○"}</Text>
-              <Text style={[qs.optionText, question === q && { color: C.brandDark, fontWeight: "700" }]}>{q}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Field label="답" value={answer} onChangeText={setAnswer} placeholder="질문의 답 (띄어쓰기는 상관없어요)" maxLength={30} />
+        {/* 이메일 인증 (실제 있는 메일로만 가입 — 아이디·비밀번호 찾기와 알림 메일에도 써요) */}
+        <EmailVerify purpose="signup" onVerified={(r) => setEmailToken(r?.emailToken ?? "")} />
 
         {!!error && <Text style={st.error}>{error}</Text>}
         <Button title={busy ? "가입하는 중…" : "가입하기"} disabled={!ready} onPress={submit} />
-        {!ready && <Text style={[st.note, { textAlign: "center" }]}>닉네임·아이디 <Text style={{ fontWeight: "700" }}>중복 확인</Text>까지 하면 가입 버튼이 켜져요.</Text>}
+        {!ready && <Text style={[st.note, { textAlign: "center" }]}>닉네임·아이디 <Text style={{ fontWeight: "700" }}>중복 확인</Text>과 <Text style={{ fontWeight: "700" }}>이메일 인증</Text>까지 하면 가입 버튼이 켜져요.</Text>}
         <LinkRow links={[{ label: "이미 계정이 있어요 · 로그인", href: "/auth/login" }]} />
       </View>
     </ScrollView>
   );
 }
-
-const qs = {
-  option: { flexDirection: "row" as const, alignItems: "center" as const, gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: C.card },
-  optionOn: { borderColor: C.brand, backgroundColor: C.brandSoft },
-  radio: { fontSize: F.lg, color: C.faint },
-  optionText: { flex: 1, fontSize: F.md, color: C.ink },
-};

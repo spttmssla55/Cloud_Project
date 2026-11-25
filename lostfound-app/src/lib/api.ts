@@ -119,7 +119,15 @@ export const apiQuestion = (q: { nickname: string } | { loginId: string }) =>
   call<{ question: string }>("/auth/question", { method: "POST", body: JSON.stringify(q) });
 export const apiFindId = (nickname: string, answer: string) =>
   call<{ loginId: string }>("/auth/find-id", { method: "POST", body: JSON.stringify({ nickname, answer }) });
-export const apiResetPassword = (b: { loginId: string; answer: string; password: string; password2: string }) =>
+/** 이메일 인증번호 (AWS SES): purpose = signup(가입) / find(아이디·비밀번호 찾기) / link(예전 계정에 메일 등록) */
+export type EmailPurpose = "signup" | "find" | "link";
+export const apiEmailSend = (email: string, purpose: EmailPurpose) =>
+  call<{ ok: boolean; message: string }>("/auth/email/send", { method: "POST", body: JSON.stringify({ email, purpose }) });
+export const apiEmailVerify = (email: string, purpose: EmailPurpose, code: string) =>
+  call<{ ok: boolean; email: string; emailToken: string; loginId?: string }>("/auth/email/verify", { method: "POST", body: JSON.stringify({ email, purpose, code }) });
+export const apiLinkEmail = (emailToken: string) => call<{ ok: boolean; email: string }>("/auth/email/link", { method: "POST", body: JSON.stringify({ emailToken }) });
+export const apiMailNotify = (on: boolean) => call<{ ok: boolean; mailNotify: boolean }>("/auth/email/notify", { method: "POST", body: JSON.stringify({ on }) });
+export const apiResetPassword = (b: { loginId: string; answer: string; password: string; password2: string } | { emailToken: string; password: string; password2: string }) =>
   call<{ ok: boolean }>("/auth/reset-password", { method: "POST", body: JSON.stringify(b) });
 export const apiMe = () => call<MyData>("/me");
 export const apiReadNotices = () => call<{ ok: boolean }>("/me/notices/read", { method: "POST", body: "{}" });
@@ -127,7 +135,7 @@ export const apiReadNotices = () => call<{ ok: boolean }>("/me/notices/read", { 
 export const apiReportItem = (id: string, kind: "here" | "gone" | "mine" | "moved", extra?: { place?: string; lat?: number; lng?: number }) =>
   call<{ ok: boolean; message: string; status?: string }>("/items/report", { method: "POST", body: JSON.stringify({ id, kind, ...extra }) });
 /** [제 물건이에요] → AI 본인 확인. 1차 {id, answer}, AI 가 질문하면 2차 {ticket, answer2} */
-export const apiClaim = (b: { id: string; answer: string } | { ticket: string; answer2: string }) =>
+export const apiClaim = (b: { id: string; answer: string } | { ticket: string; answer2: string } | { id: string; picked?: boolean }) =>
   call<ClaimResult>("/items/claim", { method: "POST", body: JSON.stringify(b) });
 /** 지도: 보이는 범위의 습득물 (같은 자리는 하나로 묶음) */
 export const apiMap = (b: { south: number; west: number; north: number; east: number; days?: number; category?: string; keyword?: string }) =>

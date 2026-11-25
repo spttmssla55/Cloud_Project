@@ -8,7 +8,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/ui";
-import { IS_MOCK } from "@/lib/api";
+import { apiEmailSend, apiEmailVerify, IS_MOCK, type EmailPurpose } from "@/lib/api";
 import { login } from "@/lib/store";
 import { C, F } from "@/lib/theme";
 
@@ -76,6 +76,97 @@ export function LinkRow({ links }: { links: { label: string; href: "/auth/signup
           </Pressable>
         </View>
       ))}
+    </View>
+  );
+}
+
+/**
+ * 이메일 인증: [메일 주소] [인증번호 받기] → [6자리] [확인] → ✅ 인증됨
+ *   실제 메일함으로 번호가 간다 (AWS SES). onVerified 로 emailToken(30분 유효)을 넘겨준다
+ */
+export function EmailVerify({
+  purpose,
+  onVerified,
+  label = "이메일",
+}: {
+  purpose: EmailPurpose;
+  onVerified: (r: { email: string; emailToken: string; loginId?: string } | null) => void;
+  label?: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [stage, setStage] = useState<"input" | "sent" | "done">("input");
+  const [msg, setMsg] = useState<{ text: string; tone: Tone }>({ text: "", tone: "info" });
+  const [busy, setBusy] = useState(false);
+  const valid = /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(email.trim());
+
+  async function send() {
+    if (IS_MOCK) return setMsg({ text: "서버를 연결해야 메일을 보낼 수 있어요.", tone: "error" });
+    setBusy(true);
+    try {
+      const r = await apiEmailSend(email.trim(), purpose);
+      setStage("sent");
+      setCode("");
+      setMsg({ text: r.message, tone: "ok" });
+    } catch (e) {
+      setMsg({ text: (e as Error).message, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function verify() {
+    setBusy(true);
+    try {
+      const r = await apiEmailVerify(email.trim(), purpose, code);
+      setStage("done");
+      setMsg({ text: "이메일 인증이 끝났어요.", tone: "ok" });
+      onVerified(r);
+    } catch (e) {
+      setMsg({ text: (e as Error).message, tone: "error" });
+    } finally {
+      setBusy(false);
+    }
+  }
+  function change() {
+    setStage("input");
+    setMsg({ text: "", tone: "info" });
+    onVerified(null);
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Field
+        label={label}
+        value={email}
+        onChangeText={(v) => { setEmail(v); if (stage !== "input") change(); }}
+        placeholder="예: hong@naver.com"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        editable={stage !== "done"}
+        note={stage === "input" ? msg.text || "실제로 쓰는 메일로 인증번호 6자리를 보내 드려요." : undefined}
+        tone={stage === "input" ? msg.tone : "info"}
+        right={
+          stage === "done" ? (
+            <SideButton title="바꾸기" onPress={change} />
+          ) : (
+            <SideButton title={stage === "sent" ? "다시 받기" : "인증번호 받기"} disabled={!valid || busy} onPress={send} />
+          )
+        }
+      />
+      {stage === "sent" && (
+        <Field
+          label="인증번호"
+          value={code}
+          onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
+          placeholder="메일로 받은 6자리"
+          keyboardType="number-pad"
+          maxLength={6}
+          note={msg.text}
+          tone={msg.tone}
+          right={<SideButton title="확인" disabled={code.length !== 6 || busy} onPress={verify} />}
+        />
+      )}
+      {stage === "done" && <Text style={[st.note, { color: C.ok, fontWeight: "700" }]}>✅ {email.trim()} 인증 완료</Text>}
     </View>
   );
 }
